@@ -260,6 +260,14 @@
   .det .desc { color: var(--muted); margin-top: 4px; font-size: 13.5px; }
   .det h4 { font-size: 12px; font-weight: 500; color: var(--dim); margin: 24px 0 10px; display: flex; align-items: center; gap: 8px; }
   .det h4 .ln { flex: 1; height: 1px; background: var(--border); }
+  .who { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+  .who .av, .wrow .av { width: 28px; height: 28px; border-radius: 50%; font-size: 12px; background: #e4e5e7; }
+  .who .t { font-size: 13.5px; font-weight: 500; }
+  .who .t .o, .wrow .t .o { color: var(--muted); font-weight: 400; }
+  .who .m { color: var(--muted); font-size: 12.5px; margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-width: 0; }
+  .who .m .msg { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .who a.sha, .wrow .sha { font: 12px var(--mono); color: var(--muted); }
+  .who a:hover { color: var(--text); }
   .loc { font: 12px var(--mono); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; }
   .proof { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .term { border-radius: 10px; border: 1px solid var(--border); background: #060708; overflow: hidden; display: flex; flex-direction: column; }
@@ -421,20 +429,30 @@ const REPOS = [
 const full = (r) => `${r.ws}/${r.name}`;
 const repoBy = (f) => REPOS.find((r) => full(r) === f);
 
+// who: 이 줄을 마지막으로 바꾼 커밋 (실제 데이터는 GitHub blame, src/lib/github.ts blameLine)
+const WHO = {
+  jun: { name: '박준', login: 'jun-park', avatar: null },
+  minji: { name: '김민지', login: 'minji-k', avatar: null },
+  hyun: { name: 'dev-hyun', login: null, avatar: null },
+};
 const F = {
   f1: { sev: 'critical', title: 'SQL Injection', desc: '입력값이 쿼리에 그대로 들어가요. 누구나 사용자 테이블 전체를 읽을 수 있어요.', path: 'src/app/api/users/route.ts', line: 9,
+    who: { ...WHO.jun, sha: '3e9c1a4', msg: '유저 검색 API 추가', ago: '2주 전', url: null, pr: { n: 14, title: 'feat: 유저 검색', url: null } },
     exploit: { kind: 'http', method: 'GET', url: "/api/users?q=' OR '1'='1", status: 200, res: '1,204 users (email 포함)' },
     recheck: { kind: 'http', method: 'GET', url: "/api/users?q=' OR '1'='1", status: 200, res: '[]', note: '빈 결과' },
     diff: [['h', '@@ -7,5 +7,6 @@ export async function GET(req: Request) {'], [' ', 7, 7, ''], [' ', 8, 8, '  const users = await db.query('], ['-', 9, 0, "    `SELECT id, email FROM users WHERE name LIKE '%${q}%'`"], ['+', 0, 9, '    "SELECT id, email FROM users WHERE name LIKE $1",'], ['+', 0, 10, '    [`%${q}%`]'], [' ', 10, 11, '  );']] },
   f2: { sev: 'critical', title: '인증 없는 삭제 API', desc: '로그인하지 않아도 누구나 유저를 지울 수 있어요.', path: 'src/app/api/users/route.ts', line: 15,
+    who: { ...WHO.jun, sha: '8b21f07', msg: '관리자용 유저 삭제', ago: '10일 전', url: null, pr: { n: 17, title: 'feat: 유저 삭제', url: null } },
     exploit: { kind: 'http', method: 'DELETE', url: '/api/users', body: '{"id":1}', status: 200, res: '로그인 없이 삭제됨' },
     recheck: { kind: 'http', method: 'DELETE', url: '/api/users', body: '{"id":1}', status: 403 },
     diff: [['h', '@@ -1,2 +1,3 @@'], [' ', 1, 1, 'import { db } from "@/lib/db";'], [' ', 2, 2, 'import { NextResponse } from "next/server";'], ['+', 0, 3, 'import { getSession } from "@/lib/auth";'], ['h', '@@ -15,2 +16,4 @@'], [' ', 15, 16, 'export async function DELETE(req: Request) {'], ['+', 0, 17, '  const session = await getSession();'], ['+', 0, 18, '  if (session?.role !== "admin") return new Response(null, { status: 403 });'], [' ', 16, 19, '  const { id } = await req.json();']] },
   f3: { sev: 'critical', title: '관리자 키 노출', desc: 'service_role 키가 NEXT_PUBLIC_ 으로 브라우저 번들에 들어가요.', path: 'src/lib/supabase.ts', line: 4,
+    who: { ...WHO.hyun, sha: 'c4d0e92', msg: 'hotfix: 키 교체', ago: '5일 전', url: null, pr: null },
     exploit: { kind: 'log', lines: ['$ grep -l service_role .next/static/chunks/*.js', 'app-4f2a.js  ← 브라우저로 내려감'] },
     recheck: { kind: 'log', lines: ['$ grep -l service_role .next/static/chunks/*.js', '(없음)'] },
     diff: [['h', '@@ -3,2 +3,2 @@'], [' ', 3, 3, 'const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;'], ['-', 4, 0, 'const key = process.env.NEXT_PUBLIC_SERVICE_ROLE_KEY!;'], ['+', 0, 4, 'const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;']] },
   f4: { sev: 'high', title: '남의 주문 조회 (IDOR)', desc: '주문 주인을 확인하지 않아서 id 만 바꾸면 남의 주문이 보여요.', path: 'src/app/api/orders/[id]/route.ts', line: 12,
+    who: { ...WHO.minji, sha: '51a7b3e', msg: '주문 상세 조회', ago: '3주 전', url: null, pr: { n: 9, title: 'feat: 주문 상세', url: null } },
     exploit: { kind: 'http', method: 'GET', url: '/api/orders/1043', who: '다른 유저 세션', status: 200, res: '남의 주소·결제 내역' },
     recheck: { kind: 'http', method: 'GET', url: '/api/orders/1043', who: '다른 유저 세션', status: 404, reason: 'where 에 userId 조건이 생겨 본인 주문만 조회돼요' },
     diff: [['h', '@@ -11,3 +11,3 @@'], [' ', 11, 11, '  const order = await db.order.findUnique({'], ['-', 12, 0, '    where: { id: params.id },'], ['+', 0, 12, '    where: { id: params.id, userId: session.user.id },'], [' ', 13, 13, '  });']] },
@@ -592,6 +610,51 @@ function frame(active, crumbs, body) {
 }
 const latest = (r) => r && r.last ? SCANS[r.last] : undefined;
 
+// ───────── 누가 넣었나 (blame) ─────────
+const whoKey = (w) => w.login || w.name;
+const avatarEl = (w) => w.avatar ? `<img class="av" src="${esc(w.avatar)}" alt="">` : `<span class="av">${esc((w.login || w.name)[0].toUpperCase())}</span>`;
+const linkOr = (url, cls, body) => url ? `<a class="${cls}" href="${esc(url)}" target="_blank" rel="noopener">${body}</a>` : `<span class="${cls}">${body}</span>`;
+function whoEl(w) {
+  if (!w) return `<div class="who"><div class="m" style="margin:0">이 줄을 넣은 커밋을 찾지 못했어요</div></div>`;
+  return `<div class="who">${avatarEl(w)}<div style="min-width:0;flex:1">
+    <div class="t">${esc(w.name)}${w.login ? ` <span class="o">@${esc(w.login)}</span>` : ''}</div>
+    <div class="m">${linkOr(w.url, 'sha', esc(w.sha))}<span class="msg">${esc(w.msg)}</span></div>
+    <div class="m">${w.pr ? `${linkOr(w.pr.url, '', `PR #${w.pr.n}`)}<span>·</span>` : '<span>PR 없이 바로 푸시</span><span>·</span>'}<span>${esc(w.ago)}</span></div>
+  </div></div>`;
+}
+/** 워크스페이스의 최근 스캔에서 찾은 취약점을, 그 줄을 넣은 사람별로 묶는다 */
+function culprits(repos) {
+  const by = new Map();
+  for (const r of repos) {
+    const s = latest(r);
+    if (!s?.findings) continue;
+    const fixed = new Set(s.fixed ?? []);
+    for (const x of s.findings) {
+      const w = F[x]?.who;
+      if (!w) continue;
+      const k = whoKey(w);
+      const g = by.get(k) ?? { w, items: [] };
+      g.items.push({ id: x, scan: r.last, repo: full(r), f: F[x], open: !fixed.has(x) });
+      by.set(k, g);
+    }
+  }
+  return [...by.values()].sort((a, b) => b.items.filter((i) => i.open).length - a.items.filter((i) => i.open).length || b.items.length - a.items.length);
+}
+function culpritRows(groups) {
+  return groups.map(({ w, items }) => {
+    const open = items.filter((i) => i.open).length;
+    const crit = items.filter((i) => i.f.sev === 'critical').length;
+    const commits = [...new Map(items.map((i) => [i.f.who.sha, i])).values()];
+    const first = items.find((i) => i.open) ?? items[0];
+    return `<div class="row wrow" data-act="who" data-v="${first.id}" data-v2="${first.scan}" style="cursor:pointer">${avatarEl(w)}
+      <div class="grow" style="min-width:0"><div class="t">${esc(w.name)}${w.login ? ` <span class="o">@${esc(w.login)}</span>` : ''}</div>
+        <div class="s">${commits.slice(0, 3).map((i) => `<span class="sha">${esc(i.f.who.sha)}</span> ${esc(i.f.who.msg)}${i.f.who.pr ? ` (#${i.f.who.pr.n})` : ''}`).join(' · ')}${commits.length > 3 ? ` 외 ${commits.length - 3}개` : ''}</div></div>
+      <span class="chip ${open ? 'red' : 'green'}">${open ? `${open}개 남음` : '모두 고침'}</span>
+      <span class="dim" style="font-size:12px;white-space:nowrap">취약점 ${items.length}${crit ? ` · Critical ${crit}` : ''}</span>
+    </div>`;
+  }).join('');
+}
+
 // ───────── 1. 대시보드 ─────────
 function dashboard() {
   const repos = REPOS.filter((r) => r.ws === S.ws);
@@ -600,6 +663,7 @@ function dashboard() {
   const crit = lasts.filter((s) => s.status === 'scanned').flatMap((s) => s.findings).filter((id) => F[id].sev === 'critical').length;
   const blocked = Object.values(SCANS).filter((s) => s.repo.startsWith(S.ws + '/')).reduce((n, s) => n + fixedOf(s), 0);
   const prs = lasts.filter((s) => s.pr && !s.pr.merged);
+  const who = culprits(repos);
   const todo = [
     ...repos.filter((r) => latest(r)?.status === 'scanned').map((r) => {
       const s = latest(r);
@@ -623,6 +687,10 @@ function dashboard() {
       <div class="sec-head"><h2>확인이 필요해요 <span class="n">${todo.length}</span></h2></div>
       ${todo.length ? `<div class="list">${todo.join('')}</div>` : `<div class="list"><div class="empty"><div class="fig" style="width:56px;height:52px">${char('happy')}</div>모두 깨끗해요</div></div>`}
     </section>
+    ${who.length ? `<section>
+      <div class="sec-head"><h2>취약한 코드를 넣은 커밋 <span class="n">${who.length}명</span></h2><span class="sp"></span><span class="dim" style="font-size:12px">최근 스캔 기준 · 그 줄을 마지막으로 바꾼 커밋</span></div>
+      <div class="list">${culpritRows(who)}</div>
+    </section>` : ''}
     <section>
       <div class="sec-head"><h2>레포 <span class="n">${repos.length}</span></h2><span class="sp"></span>
         <div class="seg">${[['all', '전체'], ['scanned', '스캔함'], ['none', '안 함']].map(([v, l]) => `<button class="${S.filter === v ? 'on' : ''}" data-act="filter" data-v="${v}">${l}</button>`).join('')}</div>
@@ -972,7 +1040,7 @@ function reportPage(id) {
             ${!done && !fixingNow ? cbEl(st.sel.has(x) ? 'on' : '', x).replace('data-act="tick"', `data-act="self" data-v2="${id}"`) : ''}
             <div class="grow"><div class="t"><span class="sev"><span class="dot" style="background:${isFx ? 'var(--green)' : sevColor(it.sev)}"></span>${SEVL[it.sev] ?? 'High'}</span><span class="sp"></span>${chip}</div>
               <div class="t" style="margin-top:4px;${isFx ? 'color:var(--muted)' : ''}">${esc(it.title)}</div>
-              <div class="s">${esc(it.path.split('/').slice(-2).join('/'))}:${it.line}</div></div>
+              <div class="s">${esc(it.path.split('/').slice(-2).join('/'))}:${it.line}${it.who ? ` · ${esc(it.who.login ? '@' + it.who.login : it.who.name)}` : ''}</div></div>
           </div>`;
         }).join('')}
         ${s.safe.length ? `<div class="safe ${S.safeOpen ? 'open' : ''}">
@@ -985,6 +1053,8 @@ function reportPage(id) {
         <div class="dh"><span class="sev"><span class="dot" style="background:${sevColor(f.sev)}"></span>${SEVL[f.sev] ?? 'High'}</span><span class="loc">${esc(f.path)}:${f.line}</span></div>
         <h3>${esc(f.title)}</h3>
         <p class="desc">${esc(f.desc)}</p>
+        <h4>넣은 커밋<span class="ln"></span></h4>
+        ${whoEl(f.who)}
         <h4>증명<span class="ln"></span></h4>
         <div class="proof">
           ${evidence(f.exploit, false)}
@@ -1032,7 +1102,8 @@ async function runFixLive(id) {
       while (F[x].fixId === undefined && Date.now() < until && !(lastArrival && Date.now() - lastArrival > 20000)) {
         await sleep(2000);
         const res = await fetch(`/api/app/findings/${x.slice(2)}`);
-        if (res.ok) F[x] = await res.json();
+        // blame(who)은 대시보드 데이터에만 있으니 남겨 둔다
+        if (res.ok) F[x] = { who: F[x].who, ...(await res.json()) };
       }
       if (F[x].fixId !== undefined) { fixIds.push(F[x].fixId); s.fixed.push(x); lastArrival = Date.now(); }
     } catch {}
@@ -1195,6 +1266,7 @@ document.addEventListener('click', (e) => {
     start: () => startBoot(),
     tab: () => { S.tab = v; render(); },
     pickf: () => { S.rep[v2].active = v; render(); },
+    who: () => { repInit(v2).active = v; location.hash = `#/scan/${v2}`; },
     self: () => { e.stopPropagation(); const s = S.rep[v2].sel; s.has(v) ? s.delete(v) : s.add(v); render(); },
     selall: () => { const st = S.rep[v2]; st.sel = st.sel.size === SCANS[v2].findings.length ? new Set() : new Set(SCANS[v2].findings); render(); },
     fix: () => runFix(v),
