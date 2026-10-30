@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:scan": "python3 scripts/build-scan-page.py public/demo.html public/scan.html",
+    "mock-backend": "node scripts/mock-backend.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

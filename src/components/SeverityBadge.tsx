@@ -1,10 +1,11 @@
 import { SEVERITY_DOT, SEVERITY_LABEL } from '@/lib/labels'
 import type { Severity } from '@/types/api'
 
-export function SeverityBadge({ severity }: { severity: Severity }) {
+/** 프로토타입의 심각도 표기: 점 + 영문 라벨. 고친 항목은 초록 점 */
+export function SeverityBadge({ severity, fixed }: { severity: Severity; fixed?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-0.5 text-xs whitespace-nowrap text-muted">
-      <i className={`size-1.5 rounded-full ${SEVERITY_DOT[severity]}`} />
+    <span className="inline-flex items-center gap-[5px] text-[11.5px] whitespace-nowrap text-muted">
+      <i className={`size-1.5 flex-none rounded-full ${fixed ? 'bg-ok' : SEVERITY_DOT[severity]}`} />
       {SEVERITY_LABEL[severity]}
     </span>
   )

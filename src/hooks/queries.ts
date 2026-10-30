@@ -48,16 +48,27 @@ export function useFinding(findingId: number) {
   return useQuery({ queryKey: ['finding', findingId], queryFn: () => reportsApi.finding(findingId) })
 }
 
-export function useFixes(findingId: number) {
-  return useQuery({ queryKey: ['fixes', findingId], queryFn: () => fixesApi.list(findingId) })
+/** poll 이 true 면 수정안이 만들어질 때까지 2.5초마다 다시 불러온다 */
+export function useFixes(findingId: number, poll = false) {
+  return useQuery({
+    queryKey: ['fixes', findingId],
+    queryFn: () => fixesApi.list(findingId),
+    refetchInterval: poll ? 2500 : false,
+  })
 }
 
 export function useRequestFix(findingId: number) {
   return useMutation({ mutationFn: () => fixesApi.request(findingId) })
 }
 
-export function usePullRequests(scanId: number) {
-  return useQuery({ queryKey: ['pull-requests', scanId], queryFn: () => pullRequestsApi.list(scanId) })
+/** 만드는 중인 PR 이 있으면 끝날 때까지 2.5초마다 다시 불러온다 */
+export function usePullRequests(scanId: number, enabled = true) {
+  return useQuery({
+    queryKey: ['pull-requests', scanId],
+    queryFn: () => pullRequestsApi.list(scanId),
+    enabled,
+    refetchInterval: (query) => (query.state.data?.some((p) => p.status === 'pending') ? 2500 : false),
+  })
 }
 
 export function useCreatePullRequest(scanId: number) {

@@ -2,19 +2,20 @@ import type { Category, ScanStatus, Severity } from '@/types/api'
 
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
 
+// 스캔 연출 화면(scan.html)과 같은 표기
 export const SEVERITY_LABEL: Record<Severity, string> = {
-  critical: '치명',
-  high: '높음',
-  medium: '중간',
-  low: '낮음',
-  info: '정보',
+  critical: 'Critical',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+  info: 'Info',
 }
 
 export const SEVERITY_DOT: Record<Severity, string> = {
   critical: 'bg-danger',
-  high: 'bg-danger/70',
-  medium: 'bg-warn',
-  low: 'bg-muted',
+  high: 'bg-warn',
+  medium: 'bg-muted',
+  low: 'bg-faint',
   info: 'bg-faint',
 }
 
@@ -42,4 +43,13 @@ export const STATUS_DOT: Record<ScanStatus, string> = {
   fixing: 'animate-pulse bg-ok',
   completed: 'bg-ok',
   failed: 'bg-danger',
+}
+
+export function timeAgo(iso: string): string {
+  const sec = (Date.now() - new Date(iso).getTime()) / 1000
+  if (sec < 60) return '방금'
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 전`
+  if (sec < 86400) return `${Math.floor(sec / 3600)}시간 전`
+  if (sec < 86400 * 7) return `${Math.floor(sec / 86400)}일 전`
+  return new Date(iso).toLocaleDateString('ko')
 }
