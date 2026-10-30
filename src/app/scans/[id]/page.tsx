@@ -12,11 +12,16 @@ export default function ScanPage({ params, searchParams }: PageProps<"/scans/[id
 
 async function Scan({ params, searchParams }: PageProps<"/scans/[id]">) {
   const { id } = await params;
-  const { repo, branch } = await searchParams;
+  const { repo, branch, report } = await searchParams;
   const name = typeof repo === "string" && !repo.startsWith("스캔 #") ? repo : "";
   return (
     <ScanFrame
-      query={{ id, repo: name || `스캔 #${id}`, branch: typeof branch === "string" ? branch : "" }}
+      query={{
+        id,
+        repo: name || `스캔 #${id}`,
+        branch: typeof branch === "string" ? branch : "",
+        report: typeof report === "string" && report.startsWith("/dashboard") ? report : `/dashboard#/scan/s_${id}`,
+      }}
       title={`${name || "레포"} 스캔`}
       live={{ scanId: Number(id), repo: name }}
     />

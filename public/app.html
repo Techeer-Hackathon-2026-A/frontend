@@ -1,0 +1,1227 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patchi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* 스캔 화면 바깥 흐름 프로토타입 (docs/PLAN.md). 토큰은 demo/index.html 과 같다.
+     코드관리 UX: Vercel(가져오기·설정·배포 목록), GitHub(Files changed), Snyk·VS Code(3단 체크 트리), Linear(사이드바·⌘K) */
+  :root {
+    --bg: #08090a;
+    --panel: #0e0f11;
+    --panel-2: #16171a;
+    --panel-3: #1d1e22;
+    --border: rgba(255, 255, 255, .07);
+    --border-2: rgba(255, 255, 255, .13);
+    --text: #f7f8f8;
+    --muted: #8a8f98;
+    --dim: #6b7079;
+    --faint: #4d5157;
+    --red: #ff5a52;
+    --red-bg: rgba(255, 90, 82, .09);
+    --amber: #f2c94c;
+    --green: #4cb782;
+    --green-bg: rgba(76, 183, 130, .09);
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.5 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
+  button, input { font: inherit; color: inherit; background: none; border: 0; outline: none; }
+  button { cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+  kbd { font: 11px var(--mono); color: var(--dim); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; line-height: 17px; }
+  svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: var(--mono); font-variant-ligatures: none; }
+  .muted { color: var(--muted); } .dim { color: var(--dim); }
+  .red { color: var(--red); } .green { color: var(--green); }
+
+  /* 앱 프레임 (Linear) */
+  .app { display: grid; grid-template-columns: 232px minmax(0, 1fr); height: 100vh; }
+  .side { display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; border-right: 1px solid var(--border); min-height: 0; }
+  .ws { display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 8px; border-radius: 7px; font-weight: 500; position: relative; }
+  .ws:hover { background: var(--panel-2); }
+  .ws .chev { margin-left: auto; color: var(--dim); }
+  .av { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; font: 600 11px Inter; color: #08090a; flex: none; }
+  .search { display: flex; align-items: center; gap: 8px; height: 30px; margin: 6px 0 10px; padding: 0 8px 0 10px; border: 1px solid var(--border); border-radius: 7px; color: var(--dim); background: var(--panel); }
+  .search:hover { border-color: var(--border-2); color: var(--muted); }
+  .search kbd { margin-left: auto; }
+  .nav { display: flex; align-items: center; gap: 10px; height: 30px; padding: 0 10px; border-radius: 6px; color: var(--muted); }
+  .nav:hover { background: var(--panel-2); color: var(--text); }
+  .nav.on { background: var(--panel-2); color: var(--text); }
+  .nav .n { margin-left: auto; font-size: 11.5px; color: var(--dim); }
+  .side h6 { font: 500 11.5px Inter; color: var(--dim); padding: 16px 10px 6px; }
+  .side .grow { flex: 1; }
+  .me { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-top: 1px solid var(--border); margin: 6px -8px -10px; padding: 12px 18px; color: var(--muted); }
+  .me img, .me .av { border-radius: 50%; }
+
+  .main { display: grid; grid-template-rows: 52px minmax(0, 1fr); min-width: 0; min-height: 0; }
+  .top { display: flex; align-items: center; gap: 8px; padding: 0 24px; border-bottom: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+  .top a:hover { color: var(--text); }
+  .top .sep { color: var(--faint); }
+  .top b { color: var(--text); font-weight: 500; }
+  .top .mlogo { display: none; }
+  .scroll { overflow: auto; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 36px 32px 96px; }
+  .wrap.narrow { max-width: 980px; }
+
+  /* 공통 */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 32px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border-2); font-weight: 500; white-space: nowrap; transition: background .15s, transform .15s, opacity .15s; }
+  .btn:hover { background: var(--panel-2); }
+  .btn.sm { height: 28px; padding: 0 11px; font-size: 12.5px; }
+  .btn.primary { background: var(--text); color: var(--bg); border-color: transparent; }
+  .btn.primary:hover { transform: translateY(-1px); background: #fff; }
+  .btn.primary kbd { color: #6b7079; border-color: rgba(0,0,0,.15); }
+  .btn.ok { background: var(--green); color: #04130b; border-color: transparent; }
+  .btn:disabled { opacity: .45; pointer-events: none; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+  .chip.red { background: var(--red-bg); color: var(--red); }
+  .chip.green { background: var(--green-bg); color: var(--green); }
+  .chip.gray { background: var(--panel-2); color: var(--muted); }
+  .tag { font: 10.5px/16px var(--mono); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; display: inline-block; }
+  .pulse { animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--faint); border-top-color: var(--text); animation: spin .8s linear infinite; flex: none; }
+  .page > * { animation: rise .35s cubic-bezier(.2,.7,.2,1) both; }
+  .page > *:nth-child(2) { animation-delay: .04s; } .page > *:nth-child(3) { animation-delay: .08s; } .page > *:nth-child(4) { animation-delay: .12s; }
+  .lang { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; }
+  .lang i { width: 8px; height: 8px; border-radius: 50%; }
+  .badge-n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--red); color: #fff; font: 600 10px/16px Inter; text-align: center; }
+  .private { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+
+  .head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 28px; }
+  .head h1 { font-size: 24px; font-weight: 500; letter-spacing: -.02em; }
+  .head p { color: var(--muted); margin-top: 4px; font-size: 13.5px; }
+  .head .sp { flex: 1; }
+  h2 { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  h2 .n { color: var(--dim); font-weight: 400; }
+  section + section { margin-top: 40px; }
+  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .sec-head .sp { flex: 1; }
+
+  /* 대시보드 */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .stat { background: var(--bg); padding: 18px 18px 16px; }
+  .stat .v { font-size: 32px; line-height: 1; font-weight: 500; letter-spacing: -.035em; font-feature-settings: 'tnum'; }
+  .stat .v small { font-size: 15px; color: var(--dim); letter-spacing: 0; margin-left: 2px; }
+  .stat .l { margin-top: 10px; color: var(--text); font-size: 12.5px; }
+  .stat .s { color: var(--dim); font-size: 12px; margin-top: 2px; }
+  .list { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-top: 1px solid var(--border); transition: background .12s; }
+  .row:first-child { border-top: 0; }
+  a.row:hover, .row.click:hover { background: var(--panel); cursor: pointer; }
+  .ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+  .ico.red { background: var(--red-bg); color: var(--red); }
+  .ico.green { background: var(--green-bg); color: var(--green); }
+  .row .t { font-size: 13.5px; font-weight: 500; }
+  .row .t .o { color: var(--muted); font-weight: 400; }
+  .row .s { color: var(--dim); font-size: 12.5px; margin-top: 1px; }
+  .row .grow { flex: 1; min-width: 0; }
+
+  .seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+  .seg button { height: 24px; padding: 0 10px; border-radius: 6px; color: var(--muted); font-size: 12.5px; }
+  .seg button.on { background: var(--panel-3); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
+  .field { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; width: 240px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--dim); }
+  .field:focus-within { border-color: var(--border-2); }
+  .field input { flex: 1; min-width: 0; color: var(--text); }
+  .field input::placeholder { color: var(--dim); }
+
+  .table .tr, .table .th { display: grid; grid-template-columns: minmax(0, 1fr) 120px 190px 92px 68px; align-items: center; gap: 12px; padding: 0 16px; }
+  .table .th { height: 34px; color: var(--dim); font-size: 12px; border-bottom: 1px solid var(--border); }
+  .table .tr { height: 52px; border-top: 1px solid var(--border); cursor: pointer; transition: background .12s; }
+  .table .th + .tr { border-top: 0; }
+  .table .tr:hover { background: var(--panel); }
+  .table .tr:hover .act { opacity: 1; }
+  .table .act { opacity: .55; transition: opacity .12s; justify-self: end; }
+  .rname { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13.5px; }
+  .rname span.nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rname .o { color: var(--muted); }
+  .st { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .empty { padding: 40px 16px; display: grid; justify-items: center; gap: 10px; color: var(--muted); text-align: center; }
+
+  /* 새 스캔 */
+  .steps { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; color: var(--dim); font-size: 12.5px; }
+  .steps span { display: inline-flex; align-items: center; gap: 7px; }
+  .steps span i { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border-2); display: grid; place-items: center; font: 500 10.5px Inter; font-style: normal; }
+  .steps span.on { color: var(--text); } .steps span.on i { background: var(--text); color: var(--bg); border-color: transparent; }
+  .steps span.done i { background: var(--panel-3); color: var(--green); border-color: transparent; }
+  .steps .ln { width: 28px; height: 1px; background: var(--border-2); }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+  .card-h { display: flex; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); }
+  .card-h .field { flex: 1; width: auto; }
+  .pick { position: relative; }
+  .pick > button { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px 0 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); font-weight: 500; }
+  .pick > button:hover { border-color: var(--border-2); }
+  .menu { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; min-width: 220px; padding: 5px; background: var(--panel-2); border: 1px solid var(--border-2); border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.5); animation: rise .15s both; }
+  .menu button { display: flex; align-items: center; gap: 9px; width: 100%; height: 32px; padding: 0 9px; border-radius: 6px; text-align: left; }
+  .menu button:hover { background: var(--panel-3); }
+  .menu .ck { margin-left: auto; color: var(--text); }
+  .menu .meta { margin-left: auto; color: var(--dim); font: 11.5px var(--mono); }
+  .menu hr { border: 0; border-top: 1px solid var(--border); margin: 5px -5px; }
+  .irow { display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; height: 56px; border-top: 1px solid var(--border); }
+  .irow:first-child { border-top: 0; }
+  .irow:hover { background: rgba(255,255,255,.015); }
+  .irow .grow { flex: 1; min-width: 0; }
+  .irow .t { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 13.5px; }
+  .irow .s { color: var(--dim); font-size: 12px; margin-top: 1px; display: flex; gap: 8px; }
+  .card-f { padding: 12px 16px; border-top: 1px solid var(--border); color: var(--dim); font-size: 12.5px; }
+  .card-f a { color: var(--muted); } .card-f a:hover { color: var(--text); }
+  .how { padding: 22px 20px; }
+  .how .fig { width: 64px; height: 60px; margin-bottom: 14px; }
+  .how h3 { font-size: 15px; font-weight: 500; letter-spacing: -.01em; }
+  .how ol { list-style: none; margin: 16px 0 0; display: grid; gap: 14px; }
+  .how li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
+  .how li i { width: 22px; height: 22px; border-radius: 6px; background: var(--panel-2); display: grid; place-items: center; font: 500 11px var(--mono); color: var(--muted); font-style: normal; }
+  .how li b { font-weight: 500; display: block; }
+  .how li span { color: var(--dim); font-size: 12.5px; }
+  .how .note { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--dim); font-size: 12px; display: flex; gap: 8px; }
+
+  /* 범위 설정 */
+  .cfg { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+  .cfg .card + .card { margin-top: 16px; }
+  .krow { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+  .krow .k { width: 64px; color: var(--muted); }
+  .hint { padding: 10px 16px; color: var(--dim); font-size: 12.5px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .tree { padding: 6px 6px 8px; font-size: 13px; }
+  .node { display: flex; align-items: center; gap: 6px; height: 30px; padding-right: 10px; padding-left: calc(var(--d) * 18px + 6px); border-radius: 6px; cursor: default; }
+  .node:hover { background: var(--panel-2); }
+  .node .tw { width: 16px; height: 16px; display: grid; place-items: center; color: var(--dim); border-radius: 4px; flex: none; }
+  .node .tw svg { width: 12px; height: 12px; transition: transform .15s; }
+  .node.open .tw svg { transform: rotate(90deg); }
+  .node .tw:hover { color: var(--text); }
+  .cb { width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid #3a3d43; display: grid; place-items: center; flex: none; cursor: pointer; transition: background .1s, border-color .1s; }
+  .cb:hover { border-color: var(--muted); }
+  .cb.on, .cb.mixed { background: var(--text); border-color: var(--text); }
+  .cb svg { width: 11px; height: 11px; stroke: var(--bg); stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .node .fi { color: var(--dim); margin: 0 2px; }
+  .node .fi.folder { color: var(--muted); }
+  .node .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .node .nm.f { cursor: pointer; }
+  .node .meta { margin-left: auto; color: var(--dim); font: 11.5px var(--mono); white-space: nowrap; padding-left: 12px; }
+  .node.off .nm, .node.off .fi { color: var(--faint); }
+  .node.ex .nm { color: var(--faint); text-decoration: line-through; text-decoration-color: rgba(255,255,255,.12); }
+  .node.ex .fi { color: var(--faint); }
+  .node .exl { margin-left: auto; font-size: 11.5px; color: var(--faint); }
+  .node.ex:hover .exl { color: var(--muted); }
+  .sum { position: sticky; top: 0; padding: 20px; }
+  .sum .big { font-size: 40px; font-weight: 500; letter-spacing: -.04em; line-height: 1; font-feature-settings: 'tnum'; }
+  .sum .big small { font-size: 14px; letter-spacing: 0; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .kv { display: flex; justify-content: space-between; padding: 7px 0; color: var(--muted); font-size: 12.5px; }
+  .kv b { color: var(--text); font-weight: 500; font-feature-settings: 'tnum'; }
+  .div { height: 1px; background: var(--border); margin: 14px 0; }
+  .opt { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+  .opt .grow { flex: 1; } .opt b { font-weight: 500; display: block; } .opt span { color: var(--dim); font-size: 12px; }
+  .sw { width: 28px; height: 16px; border-radius: 999px; background: #2a2c31; position: relative; flex: none; margin-top: 2px; transition: background .15s; }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--text); transition: transform .15s; }
+  .sw.on { background: var(--green); } .sw.on::after { transform: translateX(12px); }
+  .warn { margin-top: 10px; display: flex; gap: 8px; color: var(--amber); font-size: 12px; }
+
+  /* 보고서 */
+  .hero { display: flex; align-items: center; gap: 18px; margin-bottom: 28px; }
+  .hero .fig { width: 60px; height: 56px; flex: none; }
+  .hero h1 { font-size: 22px; font-weight: 500; letter-spacing: -.02em; }
+  .hero p { color: var(--muted); margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .hero .sp { flex: 1; }
+  .pr { display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 12px; border-radius: 12px; border: 1px solid rgba(76,183,130,.25); background: linear-gradient(180deg, rgba(76,183,130,.08), rgba(76,183,130,.03)); max-width: 420px; }
+  .pr .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pr .s { color: var(--muted); font-size: 12px; display: flex; gap: 8px; }
+  .rep { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .fl { position: sticky; top: 0; }
+  .fl .lh { display: flex; align-items: center; gap: 10px; padding: 0 4px 10px; color: var(--muted); }
+  .fitem { display: flex; gap: 11px; padding: 12px 12px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; transition: background .12s, border-color .12s; }
+  .fitem:hover { background: var(--panel); }
+  .fitem.on { background: var(--panel); border-color: var(--border-2); }
+  .fitem .cb { margin-top: 2px; }
+  .fitem .grow { flex: 1; min-width: 0; }
+  .fitem .t { font-weight: 500; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  .fitem .t .sp { flex: 1; }
+  .fitem .s { color: var(--dim); font: 11.5px var(--mono); margin-top: 3px; }
+  .sev { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); font-weight: 400; }
+  .safe { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .safe > button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 4px; color: var(--muted); }
+  .safe > button svg.c { margin-left: auto; transition: transform .15s; width: 12px; height: 12px; }
+  .safe.open > button svg.c { transform: rotate(90deg); }
+  .safe .srow { display: flex; gap: 8px; padding: 6px 4px 6px 6px; color: var(--muted); font-size: 12.5px; }
+  .safe .srow .s { color: var(--dim); font: 11.5px var(--mono); margin-left: auto; }
+  .det { padding: 22px 22px 24px; }
+  .det .dh { display: flex; align-items: center; gap: 10px; }
+  .det h3 { font-size: 18px; font-weight: 500; letter-spacing: -.015em; margin-top: 10px; }
+  .det .desc { color: var(--muted); margin-top: 4px; font-size: 13.5px; }
+  .det h4 { font-size: 12px; font-weight: 500; color: var(--dim); margin: 24px 0 10px; display: flex; align-items: center; gap: 8px; }
+  .det h4 .ln { flex: 1; height: 1px; background: var(--border); }
+  .loc { font: 12px var(--mono); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; }
+  .proof { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .term { border-radius: 10px; border: 1px solid var(--border); background: #060708; overflow: hidden; display: flex; flex-direction: column; }
+  .term .th { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .term .th .chip { margin-left: auto; }
+  .term pre { padding: 12px; font: 12px/1.75 var(--mono); color: #c9ccd1; white-space: pre-wrap; word-break: break-all; flex: 1; }
+  .term pre .m { color: var(--muted); }
+  .term pre .r { color: var(--red); } .term pre .g { color: var(--green); }
+  .term.bad { border-color: rgba(255,90,82,.22); }
+  .term.good { border-color: rgba(76,183,130,.25); }
+  .term.wait pre { color: var(--dim); font-family: Inter; font-size: 12.5px; display: grid; place-items: center; text-align: center; min-height: 92px; }
+  .reason { display: flex; gap: 8px; align-items: baseline; padding: 0 12px 12px; color: var(--muted); font-size: 12.5px; }
+  .diff { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .diff .dh { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; background: var(--panel-2); border-bottom: 1px solid var(--border); font: 12px var(--mono); color: var(--muted); }
+  .diff .dh .bar { display: inline-flex; gap: 1px; margin-left: auto; }
+  .diff .dh .bar i { width: 7px; height: 7px; border-radius: 1px; background: #2a2c31; }
+  .diff .dh .bar i.a { background: var(--green); } .diff .dh .bar i.d { background: var(--red); }
+  .dl { display: grid; grid-template-columns: 40px 40px 18px minmax(0, 1fr); font: 12px/22px var(--mono); font-variant-ligatures: none; background: #060708; }
+  .dl span { color: var(--faint); text-align: right; padding-right: 8px; user-select: none; }
+  .dl em { font-style: normal; color: var(--dim); text-align: center; }
+  .diff .db { overflow-x: auto; background: #060708; }
+  .diff .db > div { width: max-content; min-width: 100%; }
+  .dl code { white-space: pre; padding-right: 16px; color: #b6b9bf; font-family: inherit; }
+  .dl.add { background: rgba(76,183,130,.08); } .dl.add em, .dl.add code { color: #a8e0c3; } .dl.add span { color: rgba(76,183,130,.6); }
+  .dl.del { background: rgba(255,90,82,.07); } .dl.del em, .dl.del code { color: #ffb4ae; } .dl.del span { color: rgba(255,90,82,.55); }
+  .dl.hunk { background: rgba(147,197,253,.05); } .dl.hunk code { color: var(--dim); }
+
+  /* 레포 상세 */
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .tabs button { height: 38px; padding: 0 12px; color: var(--muted); position: relative; display: inline-flex; align-items: center; gap: 7px; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.on { color: var(--text); }
+  .tabs button.on::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: var(--text); border-radius: 2px; }
+  .hist .tr { display: grid; grid-template-columns: 150px minmax(0, 1fr) 170px 160px 70px; gap: 14px; align-items: center; height: 58px; padding: 0 16px; border-top: 1px solid var(--border); cursor: pointer; }
+  .hist .tr:first-child { border-top: 0; }
+  .hist .tr:hover { background: var(--panel); }
+  .hist .id { font: 12.5px var(--mono); }
+  .hist .sub { color: var(--dim); font-size: 12px; margin-top: 1px; }
+  .br { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 12px var(--mono); white-space: nowrap; }
+  .hist .c-br { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .hist .c-br svg { vertical-align: -3px; margin-right: 6px; }
+
+  /* ⌘K */
+  .ov { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.55); backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: flex-start; padding-top: 14vh; animation: fade .12s both; }
+  @keyframes fade { from { opacity: 0; } }
+  .pal { width: min(600px, calc(100vw - 32px)); background: var(--panel-2); border: 1px solid var(--border-2); border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; animation: rise .16s both; }
+  .pal .pi { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 16px; border-bottom: 1px solid var(--border); color: var(--dim); }
+  .pal .pi input { flex: 1; font-size: 15px; color: var(--text); }
+  .pal .pl { max-height: 360px; overflow: auto; padding: 6px; }
+  .pal h6 { font: 500 11.5px Inter; color: var(--dim); padding: 8px 10px 4px; }
+  .pal .it { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 8px; color: var(--muted); cursor: pointer; }
+  .pal .it.on { background: var(--panel-3); color: var(--text); }
+  .pal .it kbd { margin-left: auto; }
+  .pal .pf { display: flex; gap: 14px; padding: 9px 14px; border-top: 1px solid var(--border); color: var(--dim); font-size: 11.5px; }
+
+  /* 스캔 시작 전환 */
+  .boot { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; place-content: center; justify-items: center; gap: 18px; animation: fade .2s both; }
+  .boot .fig { width: 92px; height: 88px; animation: bob 1.1s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-5px); } }
+  .boot h2 { font-size: 20px; font-weight: 500; letter-spacing: -.02em; }
+  .boot ul { list-style: none; display: grid; gap: 8px; min-width: 260px; }
+  .boot li { display: flex; align-items: center; gap: 10px; color: var(--dim); transition: color .2s; }
+  .boot li.on { color: var(--text); } .boot li.ok { color: var(--muted); }
+  .boot li .s { width: 14px; display: grid; place-items: center; }
+  .boot li .o { width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid var(--faint); }
+  .boot .foot { color: var(--faint); font-size: 12px; margin-top: 10px; }
+
+  /* 캐릭터 포즈 */
+  .fig svg { width: 100%; height: 100%; overflow: visible; }
+
+  @media (max-width: 980px) {
+    .grid2, .cfg, .rep { grid-template-columns: 1fr; }
+    .sum, .fl { position: static; }
+    .table .tr, .table .th { grid-template-columns: minmax(0, 1fr) 170px 68px; }
+    .table .c-lang, .table .c-ago { display: none; }
+    .hist .tr { grid-template-columns: 130px minmax(0, 1fr) 140px; }
+    .hist .c-br, .hist .c-dur { display: none; }
+  }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; }
+    .side { display: none; }
+    .top { padding: 0 16px; } .top .mlogo { display: grid; }
+    .wrap { padding: 24px 16px 80px; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .head { flex-wrap: wrap; align-items: center; }
+    .hero { flex-wrap: wrap; }
+    .proof { grid-template-columns: 1fr; }
+    .field { width: 100%; }
+    .sec-head { flex-wrap: wrap; }
+    .table .tr, .table .th { grid-template-columns: minmax(0, 1fr) 68px; }
+    .table .c-st { display: none; }
+    .hist .tr { grid-template-columns: 110px minmax(0, 1fr); }
+    .hist .c-res { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ───────── 아이콘 · 캐릭터 ─────────
+const I = {
+  home: '<path d="M2.5 7 8 2.5 13.5 7v6a.5.5 0 0 1-.5.5H10V10H6v3.5H3a.5.5 0 0 1-.5-.5Z"/>',
+  repo: '<path d="M3.5 13V3a1 1 0 0 1 1-1h8v9.5h-8a1 1 0 0 0-1 1Zm0 0a1 1 0 0 0 1 1h8v-2.5"/><path d="M6 2v5l1.25-.9L8.5 7V2"/>',
+  scan: '<circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/>',
+  pr: '<circle cx="4" cy="3.5" r="1.5"/><circle cx="4" cy="12.5" r="1.5"/><circle cx="12" cy="12.5" r="1.5"/><path d="M4 5v6M12 11V6.5a2 2 0 0 0-2-2H7.5M9 3 7.5 4.5 9 6"/>',
+  branch: '<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="4.5" r="1.5"/><path d="M4.5 5v6M11.5 6c0 3.5-7 2.5-7 5"/>',
+  folder: '<path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z"/>',
+  file: '<path d="M4 1.75h5l3.5 3.5V14a.25.25 0 0 1-.25.25h-8.5A.25.25 0 0 1 3.5 14V2a.25.25 0 0 1 .25-.25ZM9 1.75v3.5h3.5"/>',
+  chev: '<path d="m6 3.5 4.5 4.5L6 12.5"/>',
+  down: '<path d="m4.5 6.5 3.5 3.5 3.5-3.5"/>',
+  updown: '<path d="m5 6 3-3 3 3M5 10l3 3 3-3"/>',
+  check: '<path d="m3.5 8.5 3 3 6-7"/>',
+  minus: '<path d="M4 8h8"/>',
+  plus: '<path d="M8 3v10M3 8h10"/>',
+  arrow: '<path d="M3 8h10M9 4l4 4-4 4"/>',
+  ext: '<path d="M6 3H3.5a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5V10M9 3h4v4M13 3 7.5 8.5"/>',
+  bug: '<path d="M5.5 5.5a2.5 2.5 0 0 1 5 0M4.5 6.5h7v3a3.5 3.5 0 0 1-7 0ZM8 6.5V13M2.5 8.5h2M11.5 8.5h2M3 12l1.8-1.2M13 12l-1.8-1.2M3 5l1.6 1.4M13 5l-1.6 1.4"/>',
+  shield: '<path d="M8 1.75 13 4v3.5c0 3-2.1 5.4-5 6.25-2.9-.85-5-3.25-5-6.25V4Z"/><path d="m5.75 7.75 1.6 1.6 3-3.1"/>',
+  lock: '<rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
+  play: '<path d="M5 3.5v9l7-4.5Z"/>',
+  gh: '',
+};
+const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 16 16">${I[n]}</svg>`;
+const ghIcon = `<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>`;
+const logo = `<div style="width:22px;height:22px;border-radius:6px;background:var(--text);display:grid;place-items:center;flex:none"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1 10.5 3v3.2C10.5 8.7 8.6 10.6 6 11.2 3.4 10.6 1.5 8.7 1.5 6.2V3Z" fill="#08090a"/></svg></div>`;
+
+// 치이카와 풍 임시 캐릭터 (web/src/components/scan/Character.tsx 와 같은 그림)
+function char(pose = 'idle') {
+  const K = '#2b2b2b';
+  const eyes = pose === 'happy'
+    ? `<path d="M14.8 24.5q2.2-3 4.4 0M28.8 24.5q2.2-3 4.4 0" fill="none" stroke="${K}" stroke-width="1.6" stroke-linecap="round"/>`
+    : `<ellipse cx="17" cy="24" rx="2.2" ry="2.8" fill="${K}"/><ellipse cx="31" cy="24" rx="2.2" ry="2.8" fill="${K}"/><circle cx="17.7" cy="22.9" r=".8" fill="#fff"/><circle cx="31.7" cy="22.9" r=".8" fill="#fff"/>`;
+  const glass = pose === 'sniff' ? `<g fill="none" stroke="${K}" stroke-width="1.8" stroke-linecap="round"><circle cx="47" cy="32" r="5" fill="rgba(147,197,253,.35)"/><path d="M43.5 35.5 40 39"/></g>` : '';
+  const wrench = pose === 'fix' ? `<g stroke-linecap="round"><path d="M40 39 48 31" stroke="${K}" stroke-width="4.2"/><path d="M40 39 48 31" stroke="#d4d7dc" stroke-width="2.2"/><circle cx="49.6" cy="29.4" r="3.7" fill="#d4d7dc" stroke="${K}" stroke-width="1.4"/><circle cx="50.7" cy="28.3" r="1.4" fill="#08090a"/></g>` : '';
+  return `<svg viewBox="0 0 48 46"><g stroke="${K}" stroke-width="1.6" fill="#fff"><ellipse cx="13" cy="10" rx="5" ry="5.5"/><ellipse cx="35" cy="10" rx="5" ry="5.5"/><ellipse cx="17" cy="42" rx="4.5" ry="2.6"/><ellipse cx="31" cy="42" rx="4.5" ry="2.6"/><path d="M24 6c13 0 20 9 20 19 0 11-8 16-20 16S4 36 4 25C4 15 11 6 24 6Z"/></g><ellipse cx="11.5" cy="29" rx="3.4" ry="1.9" fill="#ffb7c5"/><ellipse cx="36.5" cy="29" rx="3.4" ry="1.9" fill="#ffb7c5"/>${eyes}<path d="M21.6 29.2q1.2 1.3 2.4 0 1.2 1.3 2.4 0" fill="none" stroke="${K}" stroke-width="1.3" stroke-linecap="round"/>${glass}${wrench}</svg>`;
+}
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+// ───────── 목업 데이터 (web/src/lib/fixtures/demo.ts 와 같은 취약점) ─────────
+const LANG = { TypeScript: '#3178c6', Go: '#00add8', Python: '#3572a5', Astro: '#ff5a03', MDX: '#fcb32c', Shell: '#89e051' };
+const ACCOUNTS = {
+  acme: { name: 'acme', kind: '조직', color: '#c4b5fd' },
+  seoho: { name: 'seoho', kind: '개인', color: '#f7f8f8' },
+};
+const REPOS = [
+  { ws: 'acme', name: 'shop-web', lang: 'TypeScript', private: true, pushed: '2시간 전', desc: 'Next.js 쇼핑몰', branch: 'main', last: 's_7f2a' },
+  { ws: 'acme', name: 'admin-console', lang: 'TypeScript', private: true, pushed: '어제', desc: '사내 관리자 페이지', branch: 'main', last: 's_3c19' },
+  { ws: 'acme', name: 'api-gateway', lang: 'Go', private: true, pushed: '3일 전', desc: '서비스 게이트웨이', branch: 'main', last: 's_2e77' },
+  { ws: 'acme', name: 'ml-worker', lang: 'Python', private: true, pushed: '1주 전', desc: '추천 배치 작업', branch: 'main', last: 's_9a01' },
+  { ws: 'acme', name: 'landing', lang: 'Astro', private: false, pushed: '2주 전', desc: '마케팅 사이트', branch: 'main' },
+  { ws: 'acme', name: 'docs', lang: 'MDX', private: false, pushed: '1달 전', desc: '개발자 문서', branch: 'main' },
+  { ws: 'acme', name: 'infra', lang: 'Shell', private: true, pushed: '2달 전', desc: '배포 스크립트', branch: 'main' },
+  { ws: 'seoho', name: 'portfolio', lang: 'TypeScript', private: false, pushed: '어제', desc: '개인 사이트', branch: 'main', last: 's_44b2' },
+  { ws: 'seoho', name: 'todo-supabase', lang: 'TypeScript', private: false, pushed: '5일 전', desc: '', branch: 'main' },
+  { ws: 'seoho', name: 'dotfiles', lang: 'Shell', private: false, pushed: '3달 전', desc: '', branch: 'master' },
+];
+const full = (r) => `${r.ws}/${r.name}`;
+const repoBy = (f) => REPOS.find((r) => full(r) === f);
+
+const F = {
+  f1: { sev: 'critical', title: 'SQL Injection', desc: '입력값이 쿼리에 그대로 들어가요. 누구나 사용자 테이블 전체를 읽을 수 있어요.', path: 'src/app/api/users/route.ts', line: 9,
+    exploit: { kind: 'http', method: 'GET', url: "/api/users?q=' OR '1'='1", status: 200, res: '1,204 users (email 포함)' },
+    recheck: { kind: 'http', method: 'GET', url: "/api/users?q=' OR '1'='1", status: 200, res: '[]', note: '빈 결과' },
+    diff: [['h', '@@ -7,5 +7,6 @@ export async function GET(req: Request) {'], [' ', 7, 7, ''], [' ', 8, 8, '  const users = await db.query('], ['-', 9, 0, "    `SELECT id, email FROM users WHERE name LIKE '%${q}%'`"], ['+', 0, 9, '    "SELECT id, email FROM users WHERE name LIKE $1",'], ['+', 0, 10, '    [`%${q}%`]'], [' ', 10, 11, '  );']] },
+  f2: { sev: 'critical', title: '인증 없는 삭제 API', desc: '로그인하지 않아도 누구나 유저를 지울 수 있어요.', path: 'src/app/api/users/route.ts', line: 15,
+    exploit: { kind: 'http', method: 'DELETE', url: '/api/users', body: '{"id":1}', status: 200, res: '로그인 없이 삭제됨' },
+    recheck: { kind: 'http', method: 'DELETE', url: '/api/users', body: '{"id":1}', status: 403 },
+    diff: [['h', '@@ -1,2 +1,3 @@'], [' ', 1, 1, 'import { db } from "@/lib/db";'], [' ', 2, 2, 'import { NextResponse } from "next/server";'], ['+', 0, 3, 'import { getSession } from "@/lib/auth";'], ['h', '@@ -15,2 +16,4 @@'], [' ', 15, 16, 'export async function DELETE(req: Request) {'], ['+', 0, 17, '  const session = await getSession();'], ['+', 0, 18, '  if (session?.role !== "admin") return new Response(null, { status: 403 });'], [' ', 16, 19, '  const { id } = await req.json();']] },
+  f3: { sev: 'critical', title: '관리자 키 노출', desc: 'service_role 키가 NEXT_PUBLIC_ 으로 브라우저 번들에 들어가요.', path: 'src/lib/supabase.ts', line: 4,
+    exploit: { kind: 'log', lines: ['$ grep -l service_role .next/static/chunks/*.js', 'app-4f2a.js  ← 브라우저로 내려감'] },
+    recheck: { kind: 'log', lines: ['$ grep -l service_role .next/static/chunks/*.js', '(없음)'] },
+    diff: [['h', '@@ -3,2 +3,2 @@'], [' ', 3, 3, 'const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;'], ['-', 4, 0, 'const key = process.env.NEXT_PUBLIC_SERVICE_ROLE_KEY!;'], ['+', 0, 4, 'const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;']] },
+  f4: { sev: 'high', title: '남의 주문 조회 (IDOR)', desc: '주문 주인을 확인하지 않아서 id 만 바꾸면 남의 주문이 보여요.', path: 'src/app/api/orders/[id]/route.ts', line: 12,
+    exploit: { kind: 'http', method: 'GET', url: '/api/orders/1043', who: '다른 유저 세션', status: 200, res: '남의 주소·결제 내역' },
+    recheck: { kind: 'http', method: 'GET', url: '/api/orders/1043', who: '다른 유저 세션', status: 404, reason: 'where 에 userId 조건이 생겨 본인 주문만 조회돼요' },
+    diff: [['h', '@@ -11,3 +11,3 @@'], [' ', 11, 11, '  const order = await db.order.findUnique({'], ['-', 12, 0, '    where: { id: params.id },'], ['+', 0, 12, '    where: { id: params.id, userId: session.user.id },'], [' ', 13, 13, '  });']] },
+};
+const SAFE = [
+  { text: '삭제 쿼리는 파라미터 바인딩을 써요', at: 'route.ts:17' },
+  { text: 'SUPABASE_URL 은 공개돼도 괜찮아요', at: 'supabase.ts:3' },
+  { text: '주문 API 에 로그인 체크가 있어요', at: '[id]/route.ts:9' },
+];
+
+// status: queued | scanning | scanned | fixing | done | failed  (ScanSummary 와 같은 값)
+const SCANS = {
+  s_7f2a: { repo: 'acme/shop-web', branch: 'main', commit: 'a41c9e2', scope: '추천 · 11개 파일', dur: '1분 12초', ago: '12분 전', status: 'scanned', findings: ['f1', 'f2', 'f3', 'f4'], safe: SAFE },
+  s_51d0: { repo: 'acme/shop-web', branch: 'main', commit: '7d0e113', scope: '추천 · 9개 파일', dur: '58초', ago: '3일 전', status: 'done', found: 2, fixedN: 2, pr: { n: 21, merged: true } },
+  s_0b88: { repo: 'acme/shop-web', branch: 'feat/checkout-v2', commit: 'c90aa31', scope: '전체 · 31개 파일', dur: '12초', ago: '1주 전', status: 'failed', msg: '브랜치를 받지 못했어요' },
+  s_3c19: { repo: 'acme/admin-console', branch: 'main', commit: '9be03d1', scope: '추천 · 8개 파일', dur: '48초', ago: '어제', status: 'done', findings: ['f2', 'f4'], fixed: ['f2', 'f4'], safe: SAFE.slice(2), pr: { n: 18, title: 'fix(security): 인증 없는 삭제 API, IDOR 수정', add: 3, del: 1, files: 2, merged: false } },
+  s_2e77: { repo: 'acme/api-gateway', branch: 'main', commit: '1f3be70', scope: '전체 · 46개 파일', dur: '2분 4초', ago: '3일 전', status: 'done', found: 0 },
+  s_9a01: { repo: 'acme/ml-worker', branch: 'main', commit: 'e02d8c4', scope: '전체 · 22개 파일', dur: '9초', ago: '1주 전', status: 'failed', msg: '지원하지 않는 언어예요' },
+  s_44b2: { repo: 'seoho/portfolio', branch: 'main', commit: '5ac7d19', scope: '전체 · 14개 파일', dur: '40초', ago: '4일 전', status: 'done', found: 1, fixedN: 1, pr: { n: 3, merged: true } },
+};
+const foundOf = (s) => s.findings ? s.findings.length : (s.found ?? 0);
+const fixedOf = (s) => s.fixed ? s.fixed.length : (s.fixedN ?? 0);
+const openOf = (s) => s.status === 'scanned' ? foundOf(s) : s.status === 'done' ? foundOf(s) - fixedOf(s) : 0;
+
+// ───────── 상태 ─────────
+const S = {
+  ws: 'acme', menu: null, q: '', filter: 'all', iq: '',
+  pal: { open: false, q: '', i: 0 },
+  cfg: null, rep: {}, tab: 'scans', safeOpen: false,
+};
+
+// ───────── 실제 데이터 ─────────
+// /preview 는 위 목업 그대로 보여 주고, /dashboard 는 GitHub·팀 백엔드 데이터(src/lib/appData.ts)를 같은 모양으로 채워 넣는다.
+// 스캔 id 는 s_<백엔드 id>, 취약점 id 는 f_<백엔드 id>.
+const LIVE = location.pathname.startsWith('/dashboard');
+const ME = { login: 'seoho', avatar: '' };
+Object.assign(LANG, { JavaScript: '#f1e05a', Java: '#b07219', Kotlin: '#a97bff', Swift: '#f05138', Rust: '#dea584', Ruby: '#701516', PHP: '#4f5d95', 'C#': '#178600', 'C++': '#f34b7d', C: '#555555', HTML: '#e34c26', CSS: '#563d7c', Vue: '#41b883', Svelte: '#ff3e00', Dart: '#00b4ab', 'Jupyter Notebook': '#da5b0b', '': '#4d5157' });
+const SEVL = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', info: 'Info' };
+const sevColor = (sev) => sev === 'critical' ? 'var(--red)' : sev === 'high' ? 'var(--amber)' : 'var(--muted)';
+const fill = (obj, next) => { for (const k of Object.keys(obj)) delete obj[k]; Object.assign(obj, next); };
+const fillArr = (arr, next) => arr.splice(0, arr.length, ...next);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let liveBusy = false;
+
+async function loadLive() {
+  const res = await fetch('/api/app/data');
+  if (res.status === 401) return location.replace('/api/auth/logout');
+  if (!res.ok) throw new Error((await res.text()) || '불러오지 못했어요');
+  const d = await res.json();
+  ME.login = d.user.login; ME.avatar = d.user.avatarUrl;
+  fill(ACCOUNTS, Object.fromEntries(d.accounts.map((a) => [a.name, { ...a, color: a.kind === '개인' ? '#f7f8f8' : '#c4b5fd' }])));
+  fillArr(REPOS, d.repos);
+  fill(SCANS, d.scans);
+  fill(F, d.findings);
+  for (const r of REPOS) if (!(r.lang in LANG)) LANG[r.lang] = '#8a8f98';
+  // 처음엔 내 계정, 내 레포가 없으면 레포가 가장 많은 계정
+  if (!render.ws) {
+    const count = (w) => REPOS.filter((r) => r.ws === w).length;
+    S.ws = count(ME.login) ? ME.login : Object.keys(ACCOUNTS).sort((a, b) => count(b) - count(a))[0] ?? ME.login;
+    render.ws = true;
+  }
+}
+
+// 스캔이 아직 도는 중이면 몇 초마다 다시 불러온다. 입력 중이거나 고치는 중에는 건드리지 않는다
+function refreshLive() {
+  clearTimeout(refreshLive.t);
+  if (!LIVE || !Object.values(SCANS).some((s) => ['queued', 'scanning', 'fixing'].includes(s.status))) return;
+  refreshLive.t = setTimeout(async () => {
+    if (liveBusy || /INPUT|TEXTAREA/.test(document.activeElement?.tagName) || S.pal.open) return refreshLive();
+    await loadLive().catch(() => {});
+    render();
+  }, 4000);
+}
+
+/** 실제 스캔 연출 화면 (/scans/<id>). 둘러보기는 녹화 재생 */
+function scanUrl(repo, branch, id) {
+  const q = new URLSearchParams({ repo, branch });
+  if (!LIVE) return `/preview/scan?${q}`;
+  q.set('report', `/dashboard#/scan/s_${id}`);
+  return `/scans/${id}?${q}`;
+}
+
+// 범위 설정 트리: 레포·브랜치마다 GitHub 에서 받아 TREE_SRC·BRANCHES 를 바꿔 끼운다
+const TREES = {};
+let treeKey = '';
+function liveTree(repo, branch) {
+  const key = `${repo}@${branch}`;
+  if (treeKey === key) return true;
+  const t = TREES[key];
+  if (t?.tree) { setTree(t); treeKey = key; return true; }
+  if (!t) {
+    TREES[key] = {};
+    fetch(`/api/app/tree?${new URLSearchParams({ repo, branch })}`)
+      .then(async (res) => { TREES[key] = res.ok ? await res.json() : { error: (await res.text()) || '불러오지 못했어요' }; })
+      .catch(() => { TREES[key] = { error: 'GitHub 에서 불러오지 못했어요' }; })
+      .then(render);
+  }
+  return false;
+}
+
+// ───────── 레이아웃 ─────────
+function statusEl(s) {
+  if (!s) return `<span class="st"><span class="dot" style="border:1.5px solid var(--faint)"></span>스캔 안 함</span>`;
+  const open = openOf(s);
+  const map = {
+    queued: ['var(--faint)', '대기', ''],
+    scanning: ['var(--green)', '스캔 중', 'pulse'],
+    fixing: ['var(--green)', '고치는 중', 'pulse'],
+    failed: ['var(--red)', '실패', ''],
+    scanned: ['var(--amber)', '검토 대기', ''],
+    done: ['var(--green)', s.pr ? (s.pr.merged ? '머지됨' : 'PR 열림') : '문제 없음', ''],
+  };
+  const [c, label, cls] = map[s.status];
+  const extra = s.status === 'scanned' && open ? `<span class="red">· ${open}개 발견</span>` : s.status === 'done' && s.pr ? `<span class="dim">· #${s.pr.n}</span>` : '';
+  return `<span class="st"><span class="dot ${cls}" style="background:${c}"></span>${label} ${extra}</span>`;
+}
+
+function sidebar(active) {
+  const ws = ACCOUNTS[S.ws];
+  const mine = REPOS.filter((r) => r.ws === S.ws && r.last).slice(0, 4);
+  const openTotal = Object.values(SCANS).filter((s) => s.repo.startsWith(S.ws + '/')).reduce((n, s) => n + (s === latest(repoBy(s.repo)) ? openOf(s) : 0), 0);
+  return `<aside class="side">
+    <div class="pick">
+      <button class="ws" data-act="menu" data-v="ws" style="width:100%">
+        <span class="av" style="background:${ws.color}">${ws.name[0].toUpperCase()}</span>${ws.name}
+        ${ic('updown', 'chev')}
+      </button>
+      ${S.menu === 'ws' ? wsMenu() : ''}
+    </div>
+    <button class="search" data-act="pal">${ic('scan')}검색<kbd>⌘K</kbd></button>
+    <a class="nav ${active === 'home' ? 'on' : ''}" href="#/">${ic('home')}홈${openTotal ? `<span class="n"><span class="badge-n">${openTotal}</span></span>` : ''}</a>
+    <a class="nav ${active === 'new' ? 'on' : ''}" href="#/new">${ic('plus')}새 스캔<span class="n"><kbd>N</kbd></span></a>
+    <h6>최근 레포</h6>
+    ${mine.map((r) => {
+      const s = latest(r);
+      const open = s ? openOf(s) : 0;
+      return `<a class="nav ${active === full(r) ? 'on' : ''}" href="#/repo/${full(r)}"><span class="lang"><i style="background:${LANG[r.lang]}"></i></span>${r.name}${open ? `<span class="n"><span class="badge-n">${open}</span></span>` : s?.status === 'done' && s.pr && !s.pr.merged ? `<span class="n green">${ic('pr')}</span>` : ''}</a>`;
+    }).join('')}
+    <div class="grow"></div>
+    <a class="nav" href="/demo" target="_blank">${ic('play')}스캔 데모 (기존)</a>
+    ${LIVE
+      ? `<div class="me">${ME.avatar ? `<img class="av" src="${esc(ME.avatar)}" alt="">` : `<span class="av" style="background:#e4e5e7">${esc(ME.login[0].toUpperCase())}</span>`}${esc(ME.login)}<a href="/api/auth/logout" title="로그아웃" style="margin-left:auto" class="dim">${ghIcon}</a></div>`
+      : `<a class="me" href="/api/auth/login" title="GitHub 로 로그인"><span class="av" style="background:#e4e5e7">S</span>seoho<span style="margin-left:auto" class="dim">${ghIcon}</span></a>`}
+  </aside>`;
+}
+function wsMenu() {
+  return `<div class="menu">${Object.values(ACCOUNTS).map((a) => `<button data-act="ws" data-v="${a.name}"><span class="av" style="background:${a.color}">${a.name[0].toUpperCase()}</span>${a.name}<span class="meta" style="font-family:Inter">${a.kind}</span>${S.ws === a.name ? `<span class="ck" style="margin-left:8px">${ic('check')}</span>` : ''}</button>`).join('')}
+    <hr><button data-act="noop" class="muted">${ic('plus')}GitHub 조직 접근 추가</button></div>`;
+}
+function frame(active, crumbs, body) {
+  return `<div class="app">${sidebar(active)}<div class="main">
+    <div class="top"><span class="mlogo">${logo}</span>${crumbs}</div>
+    <div class="scroll" id="scroll">${body}</div>
+  </div></div>`;
+}
+const latest = (r) => r && r.last ? SCANS[r.last] : undefined;
+
+// ───────── 1. 대시보드 ─────────
+function dashboard() {
+  const repos = REPOS.filter((r) => r.ws === S.ws);
+  const lasts = repos.map(latest).filter(Boolean);
+  const open = lasts.reduce((n, s) => n + openOf(s), 0);
+  const crit = lasts.filter((s) => s.status === 'scanned').flatMap((s) => s.findings).filter((id) => F[id].sev === 'critical').length;
+  const blocked = Object.values(SCANS).filter((s) => s.repo.startsWith(S.ws + '/')).reduce((n, s) => n + fixedOf(s), 0);
+  const prs = lasts.filter((s) => s.pr && !s.pr.merged);
+  const todo = [
+    ...repos.filter((r) => latest(r)?.status === 'scanned').map((r) => {
+      const s = latest(r);
+      return `<a class="row" href="#/scan/${r.last}"><span class="ico red">${ic('bug')}</span><div class="grow"><div class="t"><span class="o">${r.ws} / </span>${r.name} — ${foundOf(s)}개 발견</div><div class="s">${foundOf(s)}개 모두 실제 공격으로 뚫리는 걸 확인했어요 · ${s.ago}</div></div><span class="btn sm">검토하기 ${ic('arrow')}</span></a>`;
+    }),
+    ...repos.filter((r) => { const s = latest(r); return s?.pr && !s.pr.merged; }).map((r) => {
+      const s = latest(r);
+      return `<a class="row" href="#/scan/${r.last}"><span class="ico green">${ic('pr')}</span><div class="grow"><div class="t"><span class="o">${r.ws} / </span>${r.name} — PR #${s.pr.n} 머지 대기</div><div class="s">${fixedOf(s)}개 고침 · 재공격 모두 막힘 · ${s.ago}</div></div><span class="btn sm">PR 보기 ${ic('arrow')}</span></a>`;
+    }),
+  ];
+  return frame('home', `<b>홈</b>`, `<div class="wrap page">
+    <div class="head"><div><h1>${S.ws}</h1><p>레포 ${repos.length}개 중 ${lasts.length}개를 지키고 있어요</p></div><span class="sp"></span>
+      <a class="btn primary" href="#/new">${ic('plus')}새 스캔 <kbd>N</kbd></a></div>
+    <section class="stats">
+      <div class="stat"><div class="v ${open ? 'red' : ''}">${open}</div><div class="l">열린 취약점</div><div class="s">${open ? `Critical ${crit} · High ${open - crit}` : '모두 막혔어요'}</div></div>
+      <div class="stat"><div class="v">${blocked}</div><div class="l">공격 차단 확인</div><div class="s">고친 뒤 같은 공격으로 재확인</div></div>
+      <div class="stat"><div class="v">${prs.length}</div><div class="l">머지 대기 PR</div><div class="s">${prs.map((s) => `#${s.pr.n}`).join(' · ') || '없음'}</div></div>
+      <div class="stat"><div class="v">${lasts.length}<small>/ ${repos.length}</small></div><div class="l">스캔한 레포</div><div class="s">${repos.length - lasts.length}개는 아직이에요</div></div>
+    </section>
+    <section>
+      <div class="sec-head"><h2>확인이 필요해요 <span class="n">${todo.length}</span></h2></div>
+      ${todo.length ? `<div class="list">${todo.join('')}</div>` : `<div class="list"><div class="empty"><div class="fig" style="width:56px;height:52px">${char('happy')}</div>모두 깨끗해요</div></div>`}
+    </section>
+    <section>
+      <div class="sec-head"><h2>레포 <span class="n">${repos.length}</span></h2><span class="sp"></span>
+        <div class="seg">${[['all', '전체'], ['scanned', '스캔함'], ['none', '안 함']].map(([v, l]) => `<button class="${S.filter === v ? 'on' : ''}" data-act="filter" data-v="${v}">${l}</button>`).join('')}</div>
+        <label class="field">${ic('scan')}<input id="q" placeholder="레포 검색" value="${esc(S.q)}"><kbd>/</kbd></label>
+      </div>
+      <div class="list table"><div class="th"><span>이름</span><span class="c-lang">언어</span><span class="c-st">마지막 스캔</span><span class="c-ago">푸시</span><span></span></div><div id="rows">${repoRows()}</div></div>
+    </section>
+  </div>`);
+}
+function repoRows() {
+  const q = S.q.trim().toLowerCase();
+  const rows = REPOS.filter((r) => r.ws === S.ws)
+    .filter((r) => (S.filter === 'all' || (S.filter === 'scanned') === Boolean(r.last)) && full(r).includes(q));
+  if (!rows.length) return `<div class="empty">${q ? `“${esc(S.q)}” 와 일치하는 레포가 없어요` : '레포가 없어요'}</div>`;
+  return rows.map((r) => `<div class="tr" data-act="go" data-v="#/repo/${full(r)}">
+      <div class="rname"><span class="nm"><span class="o">${r.ws} / </span>${r.name}</span>${r.private ? '<span class="private">Private</span>' : ''}</div>
+      <span class="lang c-lang"><i style="background:${LANG[r.lang]}"></i>${r.lang}</span>
+      <span class="c-st">${statusEl(latest(r))}</span>
+      <span class="dim c-ago">${r.pushed}</span>
+      <a class="btn sm act" href="#/new/${full(r)}" data-stop>스캔</a>
+    </div>`).join('');
+}
+
+// ───────── 2. 새 스캔 ① 레포 가져오기 (Vercel Import) ─────────
+function importPage() {
+  const ws = ACCOUNTS[S.ws];
+  return frame('new', `<a href="#/">홈</a><span class="sep">/</span><b>새 스캔</b>`, `<div class="wrap narrow page">
+    ${steps(1)}
+    <div class="head"><div><h1>어떤 레포를 지킬까요?</h1><p>GitHub 레포를 가져오면 스캔할 범위를 고를 수 있어요</p></div></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-h">
+          <div class="pick"><button data-act="menu" data-v="ws2"><span class="av" style="background:${ws.color}">${ws.name[0].toUpperCase()}</span>${ws.name}${ic('down', 'dim')}</button>${S.menu === 'ws2' ? wsMenu() : ''}</div>
+          <label class="field">${ic('scan')}<input id="iq" placeholder="검색" value="${esc(S.iq)}"></label>
+        </div>
+        <div id="irows">${importRows()}</div>
+        <div class="card-f">레포가 안 보이나요? <a href="#" data-act="noop">GitHub 에서 조직 접근 허용 ${ic('ext')}</a></div>
+      </div>
+      <aside class="card how">
+        <div class="fig">${char('sniff')}</div>
+        <h3>Patchi 는 이렇게 일해요</h3>
+        <ol>
+          <li><i>1</i><div><b>찾기</b><span>코드를 한 줄씩 따라가며 의심 지점을 찾아요</span></div></li>
+          <li><i>2</i><div><b>뚫어보기</b><span>샌드박스에서 실제로 공격해 진짜인지 확인해요</span></div></li>
+          <li><i>3</i><div><b>고치기</b><span>고친 뒤 같은 공격이 막히면 PR 을 올려요</span></div></li>
+        </ol>
+        <div class="note">${ic('lock')}<span>PR 을 직접 머지하기 전까지 레포는 아무것도 바뀌지 않아요</span></div>
+      </aside>
+    </div>
+  </div>`);
+}
+function importRows() {
+  const q = S.iq.trim().toLowerCase();
+  const rows = REPOS.filter((r) => r.ws === S.ws && r.name.includes(q));
+  if (!rows.length) return `<div class="empty">일치하는 레포가 없어요</div>`;
+  return rows.map((r) => {
+    const s = latest(r);
+    return `<div class="irow">
+      <span class="lang"><i style="background:${LANG[r.lang]}"></i></span>
+      <div class="grow"><div class="t">${r.name}${r.private ? ' <span class="private">Private</span>' : ''}</div>
+        <div class="s"><span>${r.pushed} 푸시</span>${s ? `<span>·</span>${statusEl(s).replace('class="st"', 'class="st" style="font-size:12px"')}` : ''}</div></div>
+      <a class="btn sm ${s ? '' : 'primary'}" href="#/new/${full(r)}">${s ? '다시 스캔' : '가져오기'}</a>
+    </div>`;
+  }).join('');
+}
+function steps(n) {
+  const L = ['레포', '범위', '스캔'];
+  return `<div class="steps">${L.map((l, i) => `${i ? '<span class="ln"></span>' : ''}<span class="${i + 1 === n ? 'on' : i + 1 < n ? 'done' : ''}"><i>${i + 1 < n ? ic('check').replace('class="i ', 'style="width:11px;height:11px;stroke-width:2.2" class="i ') : i + 1}</i>${l}</span>`).join('')}</div>`;
+}
+
+// ───────── 3. 새 스캔 ② 범위 설정 (Vercel Configure + 3단 체크 트리) ─────────
+const TREE_SRC = [
+  { n: '.github', c: [{ n: 'workflows', c: [{ n: 'ci.yml', l: 42 }] }] },
+  { n: 'node_modules', x: '의존성', files: 1203, l: 184200 },
+  { n: 'public', x: '정적 파일', c: [{ n: 'hero.png' }, { n: 'logo.svg' }] },
+  { n: 'src', c: [
+    { n: 'app', c: [
+      { n: 'api', c: [
+        { n: 'auth', c: [{ n: '[...nextauth]', c: [{ n: 'route.ts', l: 38, t: ['API', 'auth'] }] }] },
+        { n: 'orders', c: [{ n: '[id]', c: [{ n: 'route.ts', l: 16, t: ['API', 'DB'] }] }] },
+        { n: 'users', c: [{ n: 'route.ts', l: 19, t: ['API', 'DB'] }] },
+        { n: 'webhooks', c: [{ n: 'stripe', c: [{ n: 'route.ts', l: 54, t: ['API'] }] }] },
+      ] },
+      { n: 'checkout', c: [{ n: 'page.tsx', l: 112 }] },
+      { n: 'login', c: [{ n: 'page.tsx', l: 76, t: ['auth'] }] },
+      { n: 'layout.tsx', l: 28 },
+      { n: 'page.tsx', l: 11 },
+    ] },
+    { n: 'components', c: [{ n: 'CartDrawer.tsx', l: 94 }, { n: 'Header.tsx', l: 41 }, { n: 'ProductCard.tsx', l: 63 }] },
+    { n: 'lib', c: [{ n: 'auth.ts', l: 47, t: ['auth'] }, { n: 'db.ts', l: 22, t: ['DB'] }, { n: 'stripe.ts', l: 31 }, { n: 'supabase.ts', l: 6, t: ['DB', 'env'] }] },
+    { n: 'middleware.ts', l: 33, t: ['auth'] },
+  ] },
+  { n: 'tests', x: '테스트', c: [{ n: 'orders.test.ts', l: 58 }, { n: 'users.test.ts', l: 71 }] },
+  { n: '.env.example', l: 9, t: ['env'] },
+  { n: 'next.config.ts', l: 14, t: ['config'] },
+  { n: 'package-lock.json', x: 'lock 파일', l: 8420 },
+  { n: 'package.json', l: 38 },
+  { n: 'README.md', l: 61 },
+];
+const NODES = {};
+function indexTree(list, parent, depth) {
+  for (const n of list) {
+    n.path = parent ? `${parent.path}/${n.n}` : n.n;
+    n.parent = parent; n.d = depth;
+    NODES[n.path] = n;
+    if (n.c) indexTree(n.c, n, depth + 1);
+  }
+}
+indexTree(TREE_SRC, null, 0);
+const isLeaf = (n) => !n.c;
+const leaves = (n) => isLeaf(n) ? [n] : n.c.flatMap(leaves);
+const ALL_LEAVES = TREE_SRC.flatMap(leaves);
+const BRANCHES = [
+  { n: 'main', commit: 'a41c9e2', ago: '2시간 전', def: true },
+  { n: 'dev', commit: '3b77f01', ago: '어제' },
+  { n: 'feat/checkout-v2', commit: 'c90aa31', ago: '1주 전' },
+];
+
+function cfgInit(repo, branch = 'main') {
+  if (S.cfg && S.cfg.repo === repo) return;
+  S.cfg = { repo, branch, preset: 'rec', sel: new Set(), inc: new Set(), open: LIVE ? recOpen() : new Set(['src', 'src/app', 'src/app/api', 'src/app/api/users', 'src/app/api/orders', 'src/app/api/orders/[id]', 'src/lib']), verify: true, autoPr: false };
+  applyPreset('rec');
+}
+/** 추천 파일이 보이도록 펼칠 폴더 */
+function recOpen() {
+  const open = new Set();
+  // S.cfg 를 만드는 중에도 불리므로 기본 제외만 본다
+  const ex = (n) => { for (let p = n; p; p = p.parent) if (p.x) return true; return false; };
+  for (const l of ALL_LEAVES) if (l.t && !ex(l)) for (let p = l.parent; p; p = p.parent) open.add(p.path);
+  return open;
+}
+function setTree(d) {
+  fillArr(TREE_SRC, d.tree);
+  fill(NODES, {});
+  indexTree(TREE_SRC, null, 0);
+  fillArr(ALL_LEAVES, TREE_SRC.flatMap(leaves));
+  fillArr(BRANCHES, d.branches);
+  // 브랜치를 바꿨으면 같은 설정으로 새 트리에서 다시 고른다
+  if (S.cfg) { S.cfg.inc = new Set(); S.cfg.open = recOpen(); applyPreset(S.cfg.preset === 'custom' ? 'rec' : S.cfg.preset); }
+}
+function excluded(n) {
+  for (let p = n; p; p = p.parent) if (p.x && !S.cfg.inc.has(p.path)) return p.x;
+  return null;
+}
+function applyPreset(p) {
+  const c = S.cfg;
+  c.preset = p;
+  if (p === 'custom') return;
+  c.sel = new Set(ALL_LEAVES.filter((l) => !excluded(l) && (p === 'all' || l.t)).map((l) => l.path));
+}
+function boxState(n) {
+  const ls = leaves(n).filter((l) => !excluded(l));
+  const k = ls.filter((l) => S.cfg.sel.has(l.path)).length;
+  return { k, total: ls.length, st: !ls.length || !k ? '' : k === ls.length ? 'on' : 'mixed' };
+}
+function cbEl(st, path) {
+  return `<span class="cb ${st}" data-act="tick" data-v="${esc(path)}" role="checkbox" aria-checked="${st === 'on' ? 'true' : st === 'mixed' ? 'mixed' : 'false'}">${st === 'on' ? `<svg viewBox="0 0 16 16">${I.check}</svg>` : st === 'mixed' ? `<svg viewBox="0 0 16 16">${I.minus}</svg>` : ''}</span>`;
+}
+function treeRows(list) {
+  return list.map((n) => {
+    const ex = excluded(n);
+    const ownEx = n.x && !S.cfg.inc.has(n.path);
+    const folder = !isLeaf(n);
+    const open = folder && S.cfg.open.has(n.path) && !ex;
+    const { k, total, st } = boxState(n);
+    const cls = ['node', open ? 'open' : '', ex ? 'ex' : '', !ex && !st ? 'off' : ''].join(' ');
+    const meta = ex
+      ? (ownEx ? `<span class="exl">${ex} · 제외됨</span>` : '')
+      : folder ? `<span class="meta">${k}/${total}</span>` : `<span class="meta">${n.files ? `${n.files.toLocaleString()}개 파일` : n.l ? `${n.l}줄` : ''}</span>`;
+    const row = `<div class="${cls}" style="--d:${n.d}">
+      <span class="tw" ${folder && !ex ? `data-act="fold" data-v="${esc(n.path)}"` : ''}>${folder && !ex ? `<svg class="i" viewBox="0 0 16 16">${I.chev}</svg>` : ''}</span>
+      ${cbEl(ex ? '' : st, n.path)}
+      <span class="fi ${folder || n.files ? 'folder' : ''}">${ic(folder || n.files ? 'folder' : 'file')}</span>
+      <span class="nm ${folder ? 'f' : ''}" ${folder && !ex ? `data-act="fold" data-v="${esc(n.path)}"` : `data-act="tick" data-v="${esc(n.path)}"`}>${esc(n.n)}</span>
+      ${!ex && n.t ? n.t.map((t) => `<span class="tag">${t}</span>`).join('') : ''}
+      ${meta}
+    </div>`;
+    return row + (open ? treeRows(n.c) : '');
+  }).join('');
+}
+function cfgSummary() {
+  const c = S.cfg;
+  const sel = ALL_LEAVES.filter((l) => c.sel.has(l.path) && !excluded(l));
+  const files = sel.reduce((n, l) => n + (l.files ?? 1), 0);
+  const lines = sel.reduce((n, l) => n + (l.l ?? 0), 0);
+  const mins = Math.max(1, Math.round(lines / 600 * (c.verify ? 1.6 : 1)));
+  const deps = sel.some((l) => l.files);
+  return `<div class="big">${files.toLocaleString()}<small>개 파일</small></div>
+    <div style="margin-top:14px">
+      <div class="kv"><span>코드</span><b>${lines.toLocaleString()}줄</b></div>
+      <div class="kv"><span>브랜치</span><b class="mono" style="font-size:12px">${c.branch}</b></div>
+      <div class="kv"><span>예상 시간</span><b>${!files ? '—' : mins >= 60 ? `약 ${Math.round(mins / 60)}시간` : `약 ${mins}분`}</b></div>
+    </div>
+    ${deps ? `<div class="warn">${ic('bug')}<span>의존성까지 넣으면 오래 걸려요. 보통은 빼고 스캔해요</span></div>` : ''}
+    <div class="div"></div>
+    <div class="opt" data-act="opt" data-v="verify"><div class="grow"><b>공격으로 검증</b><span>샌드박스에서 실제 요청을 보내 진짜인지 확인해요</span></div><span class="sw ${c.verify ? 'on' : ''}"></span></div>
+    <div class="opt" data-act="opt" data-v="autoPr"><div class="grow"><b>바로 PR 열기</b><span>끄면 결과를 보고 고칠 것을 직접 골라요</span></div><span class="sw ${c.autoPr ? 'on' : ''}"></span></div>
+    <div class="div"></div>
+    <button class="btn primary" style="width:100%;height:38px" data-act="start" ${files ? '' : 'disabled'}>스캔 시작 ${ic('arrow')}</button>`;
+}
+function configPage(repoFull) {
+  const r = repoBy(repoFull);
+  if (!r) return notFound();
+  if (LIVE) {
+    const branch = S.cfg?.repo === repoFull ? S.cfg.branch : r.branch;
+    if (!liveTree(repoFull, branch)) {
+      const err = TREES[`${repoFull}@${branch}`]?.error;
+      return frame('new', `<a href="#/">홈</a><span class="sep">/</span><a href="#/new">새 스캔</a><span class="sep">/</span><b>${r.name}</b>`, `<div class="wrap narrow page">${steps(2)}
+        <div class="card empty" style="padding:56px 16px"><div class="fig" style="width:56px;height:52px">${char(err ? 'idle' : 'sniff')}</div>${err ? esc(err) : '파일 목록을 불러오는 중…'}${err ? '<a class="btn sm" href="#/new">레포 다시 고르기</a>' : ''}</div></div>`);
+    }
+    cfgInit(repoFull, branch);
+  } else cfgInit(repoFull);
+  const c = S.cfg;
+  const b = BRANCHES.find((x) => x.n === c.branch) ?? BRANCHES[0];
+  const recN = ALL_LEAVES.filter((l) => l.t && !excluded(l)).length;
+  const hints = {
+    rec: `API·인증·DB·환경설정처럼 공격받기 쉬운 ${recN}개 파일을 먼저 봐요`,
+    all: '제외 목록을 뺀 모든 파일을 봐요',
+    custom: '체크한 파일만 봐요',
+  };
+  return frame('new', `<a href="#/">홈</a><span class="sep">/</span><a href="#/new">새 스캔</a><span class="sep">/</span><b>${r.name}</b>`, `<div class="wrap narrow page">
+    ${steps(2)}
+    <div class="head"><div><h1 style="display:flex;align-items:center;gap:10px"><span class="muted" style="font-weight:400">${r.ws} /</span> ${r.name}${r.private ? '<span class="private" style="font-size:11px">Private</span>' : ''}</h1><p>스캔할 브랜치와 범위를 골라요</p></div></div>
+    <div class="cfg">
+      <div>
+        <div class="card"><div class="krow"><span class="k">브랜치</span>
+          <div class="pick"><button data-act="menu" data-v="br">${ic('branch', 'dim')}<span class="mono" style="font-size:12.5px;font-weight:400">${c.branch}</span>${ic('down', 'dim')}</button>
+            ${S.menu === 'br' ? `<div class="menu">${BRANCHES.map((x) => `<button data-act="branch" data-v="${x.n}"><span class="mono" style="font-size:12.5px">${x.n}</span>${x.def ? '<span class="private" style="margin-left:6px">기본</span>' : ''}<span class="meta">${x.commit}</span>${x.n === c.branch ? `<span class="ck" style="margin-left:8px">${ic('check')}</span>` : ''}</button>`).join('')}</div>` : ''}
+          </div>
+          <span class="dim mono" style="font-size:12px">${b.commit}</span>${b.ago ? `<span class="dim">· ${b.ago}</span>` : ''}
+        </div></div>
+
+        <div class="card">
+          <div class="card-h" style="padding:12px 16px">
+            <span class="muted" style="width:52px">범위</span>
+            <div class="seg">${[['rec', '추천'], ['all', '전체'], ['custom', '직접 선택']].map(([v, l]) => `<button class="${c.preset === v ? 'on' : ''}" data-act="preset" data-v="${v}">${l}</button>`).join('')}</div>
+            <span style="flex:1"></span>
+            <button class="dim" data-act="foldall" style="font-size:12.5px">${c.open.size > 4 ? '모두 접기' : '모두 펼치기'}</button>
+          </div>
+          <div class="hint" id="hint">${ic('shield')}${hints[c.preset]}</div>
+          <div class="tree" id="tree">${treeRows(TREE_SRC)}</div>
+          <div class="card-f">기본 제외: 의존성 · 테스트 · lock 파일 · 정적 파일. 체크하면 다시 포함돼요</div>
+        </div>
+      </div>
+      <aside class="card sum" id="sum">${cfgSummary()}</aside>
+    </div>
+  </div>`);
+}
+function startBoot() {
+  const c = S.cfg;
+  const files = ALL_LEAVES.filter((l) => c.sel.has(l.path) && !excluded(l)).reduce((n, l) => n + (l.files ?? 1), 0);
+  const items = [`${c.branch} 브랜치 받기`, `${files}개 파일 준비`, c.verify ? '공격용 샌드박스 띄우기' : '분석기 준비'];
+  const el = document.createElement('div');
+  el.className = 'boot';
+  let err = '';
+  const draw = (k) => el.innerHTML = `<div class="fig">${char('sniff')}</div><h2>${c.repo}</h2>
+    <ul>${items.map((t, i) => `<li class="${i < k ? 'ok' : i === k ? 'on' : ''}"><span class="s">${i < k ? `<span class="green">${ic('check')}</span>` : i === k ? '<span class="spin"></span>' : '<span class="o"></span>'}</span>${t}</li>`).join('')}</ul>
+    <div class="foot">${err ? `<span class="red">${esc(err)}</span> · 눌러서 닫기` : k >= items.length ? '스캔 화면으로 이동해요…' : `${c.repo} · ${c.branch}`}</div>`;
+  document.body.append(el);
+  const go = LIVE
+    ? fetch('/api/app/scans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo: c.repo, branch: c.branch }) })
+      .then(async (res) => { if (!res.ok) throw new Error((await res.text()) || '스캔을 시작하지 못했어요'); return scanUrl(c.repo, c.branch, (await res.json()).id); })
+    : Promise.resolve(scanUrl(c.repo, c.branch));
+  go.catch((e) => { clearInterval(t); err = e.message || '스캔 서버에 연결할 수 없어요'; draw(k); });
+  let k = 0; draw(0);
+  const t = setInterval(() => {
+    draw(++k);
+    if (k > items.length) {
+      clearInterval(t);
+      go.then((url) => location.href = url, () => {});
+    }
+  }, 750);
+  el.addEventListener('click', () => { clearInterval(t); el.remove(); });
+}
+
+// ───────── 4. 스캔 보고서 — 증명이 주인공 ─────────
+function repInit(id) {
+  if (S.rep[id]) return S.rep[id];
+  const s = SCANS[id];
+  return S.rep[id] = { sel: new Set(s.findings), active: s.findings?.[0], fixing: null };
+}
+function evidence(e, after) {
+  const blocked = after && e.ok !== false;
+  const chip = (good) => `<span class="chip ${good ? 'green' : 'red'}">${good ? '막힘' : '뚫림'}${e.note ? ` · ${e.note}` : e.status ? ` ${e.status}` : ''}</span>`;
+  const head = `<div class="th">${after ? '고친 뒤 · 같은 공격' : '고치기 전 · 공격'}${chip(blocked)}</div>`;
+  if (e.kind === 'log') {
+    return `<div class="term ${blocked ? 'good' : 'bad'}">${head}<pre>${e.lines.map((l, i) => i === 0 ? `<span class="m">${esc(l)}</span>` : `<span class="${blocked ? 'g' : 'r'}">${esc(l)}</span>`).join('\n')}</pre></div>`;
+  }
+  return `<div class="term ${blocked ? 'good' : 'bad'}">${head}<pre><span class="m">${e.method}</span> ${esc(e.url)}${e.body ? `\n<span class="m">body</span> ${esc(e.body)}` : ''}${e.who ? `\n<span class="m">as</span>   ${e.who}` : ''}
+<span class="${blocked ? 'g' : 'r'}">→ ${e.status}</span>${e.res ? `  ${esc(e.res)}` : ''}</pre>${e.reason ? `<div class="reason">${ic('check', 'green')}<span>${esc(e.reason)}</span></div>` : ''}</div>`;
+}
+function diffEl(f) {
+  if (!f.diff?.length) return `<div class="term wait"><pre>고치기를 누르면 수정안을 만들어요</pre></div>`;
+  const adds = f.diff.filter((d) => d[0] === '+').length, dels = f.diff.filter((d) => d[0] === '-').length;
+  const bar = Array.from({ length: 5 }, (_, i) => `<i class="${i < Math.round(5 * adds / (adds + dels)) ? 'a' : i < 5 ? 'd' : ''}"></i>`).join('');
+  return `<div class="diff"><div class="dh">${esc(f.path)}<span class="green">+${adds}</span><span class="red">−${dels}</span><span class="bar">${bar}</span></div>
+    <div class="db"><div>${f.diff.map((d) => d[0] === 'h'
+      ? `<div class="dl hunk"><span></span><span></span><em></em><code>${esc(d[1])}</code></div>`
+      : `<div class="dl ${d[0] === '+' ? 'add' : d[0] === '-' ? 'del' : ''}"><span>${d[1] || ''}</span><span>${d[2] || ''}</span><em>${d[0] === ' ' ? '' : d[0] === '-' ? '−' : '+'}</em><code>${esc(d[3])}</code></div>`).join('')}</div></div>
+  </div>`;
+}
+function reportPage(id) {
+  const s = SCANS[id];
+  if (!s || !s.findings) return legacyScan(id);
+  const r = repoBy(s.repo);
+  const st = repInit(id);
+  const fixed = new Set(s.fixed ?? []);
+  const done = s.status === 'done';
+  const fixingNow = s.status === 'fixing';
+  const fid = st.active;
+  const f = F[fid];
+  const isFixed = fixed.has(fid);
+  const selN = s.findings.filter((x) => st.sel.has(x)).length;
+  const crit = s.findings.filter((x) => F[x].sev === 'critical').length;
+
+  const heroTitle = done
+    ? (fixed.size === s.findings.length ? `${fixed.size}개를 고쳤고, 같은 공격이 모두 막혔어요` : `${fixed.size}개를 고쳤어요 · ${s.findings.length - fixed.size}개 남음`)
+    : fixingNow ? '고치고 다시 공격해 보는 중이에요…' : `${s.findings.length}개를 찾았고, 모두 실제로 뚫렸어요`;
+  const action = done && s.pr
+    ? `<div class="pr"><span class="ico green">${ic('pr')}</span><div style="min-width:0;flex:1"><div class="t">#${s.pr.n} ${esc(s.pr.title)}</div><div class="s"><span class="green">+${s.pr.add}</span><span class="red">−${s.pr.del}</span><span>${s.pr.files}개 파일</span><span>· ${s.pr.merged ? '머지됨' : '머지 대기'}</span></div></div><a class="btn sm ok" ${s.pr.url ? `href="${esc(s.pr.url)}" target="_blank" rel="noopener"` : 'href="#" data-act="noop"'}>GitHub ${ic('ext')}</a></div>`
+    : `<button class="btn primary" style="height:38px;padding:0 18px" data-act="fix" data-v="${id}" ${!selN || fixingNow ? 'disabled' : ''}>${fixingNow ? '<span class="spin" style="border-top-color:var(--bg)"></span>고치는 중…' : `${ic('pr')}선택한 ${selN}개 고치고 PR 열기`}</button>`;
+
+  return frame(s.repo, `<a href="#/">홈</a><span class="sep">/</span><a href="#/repo/${s.repo}">${r.name}</a><span class="sep">/</span><b class="mono" style="font-weight:400;font-size:12.5px">${id}</b>`, `<div class="wrap page">
+    <div class="hero">
+      <div class="fig">${char(done ? 'happy' : fixingNow ? 'fix' : 'sniff')}</div>
+      <div><h1>${heroTitle}</h1><p><span class="br">${ic('branch')}${s.branch}</span><span class="dim mono" style="font-size:12px">${s.commit}</span><span class="dim">· ${s.scope} · ${s.dur} · ${s.ago}</span>${S.err ? `<span class="red">· ${esc(S.err)}</span>` : ''}</p></div>
+      <span class="sp"></span>${action}
+    </div>
+    <div class="rep">
+      <div class="fl">
+        <div class="lh">
+          ${!done && !fixingNow ? cbEl(selN === s.findings.length ? 'on' : selN ? 'mixed' : '', '__all').replace('data-act="tick"', `data-act="selall" data-v2="${id}"`) : ''}
+          <span>취약점 ${s.findings.length}</span><span class="dim">· Critical ${crit} · High ${s.findings.length - crit}</span>
+        </div>
+        ${s.findings.map((x) => {
+          const it = F[x];
+          const isFx = fixed.has(x);
+          const isNow = st.fixing === x;
+          const chip = isNow ? `<span class="chip gray"><span class="spin" style="width:10px;height:10px"></span>고치는 중</span>`
+            : isFx ? (it.recheck?.ok === false ? `<span class="chip gray">확인 필요</span>` : `<span class="chip green">막힘</span>`) : done ? `<span class="chip gray">남음</span>` : `<span class="chip red">뚫림</span>`;
+          return `<div class="fitem ${x === fid ? 'on' : ''}" data-act="pickf" data-v="${x}" data-v2="${id}">
+            ${!done && !fixingNow ? cbEl(st.sel.has(x) ? 'on' : '', x).replace('data-act="tick"', `data-act="self" data-v2="${id}"`) : ''}
+            <div class="grow"><div class="t"><span class="sev"><span class="dot" style="background:${isFx ? 'var(--green)' : sevColor(it.sev)}"></span>${SEVL[it.sev] ?? 'High'}</span><span class="sp"></span>${chip}</div>
+              <div class="t" style="margin-top:4px;${isFx ? 'color:var(--muted)' : ''}">${esc(it.title)}</div>
+              <div class="s">${esc(it.path.split('/').slice(-2).join('/'))}:${it.line}</div></div>
+          </div>`;
+        }).join('')}
+        ${s.safe.length ? `<div class="safe ${S.safeOpen ? 'open' : ''}">
+          <button data-act="safe">${ic('shield', 'green')}안전 확인 ${s.safe.length}<span class="dim">· 의심했지만 괜찮았어요</span><svg class="i c" viewBox="0 0 16 16">${I.chev}</svg></button>
+          ${S.safeOpen ? s.safe.map((x) => `<div class="srow">${ic('check', 'green')}<span>${esc(x.text)}</span><span class="s">${esc(x.at)}</span></div>`).join('') : ''}
+        </div>` : ''}
+      </div>
+
+      <div class="card det">
+        <div class="dh"><span class="sev"><span class="dot" style="background:${sevColor(f.sev)}"></span>${SEVL[f.sev] ?? 'High'}</span><span class="loc">${esc(f.path)}:${f.line}</span></div>
+        <h3>${esc(f.title)}</h3>
+        <p class="desc">${esc(f.desc)}</p>
+        <h4>증명<span class="ln"></span></h4>
+        <div class="proof">
+          ${evidence(f.exploit, false)}
+          ${isFixed ? evidence(f.recheck, true) : `<div class="term wait"><div class="th">고친 뒤 · 같은 공격<span class="chip gray" style="margin-left:auto">대기</span></div><pre>${st.fixing === fid ? '<span><span class="spin" style="display:inline-block;vertical-align:-2px;margin-right:8px"></span>다시 공격하는 중…</span>' : '고치면 같은 공격을 다시 보내서<br>막혔는지 확인해요'}</pre></div>`}
+        </div>
+        <h4>${isFixed ? '적용된 수정' : '제안된 수정'}<span class="ln"></span></h4>
+        ${diffEl(f)}
+      </div>
+    </div>
+  </div>`);
+}
+async function runFix(id) {
+  if (LIVE) return runFixLive(id);
+  const s = SCANS[id], st = S.rep[id];
+  const todo = s.findings.filter((x) => st.sel.has(x));
+  s.status = 'fixing'; s.fixed = [];
+  render();
+  for (const x of todo) {
+    st.fixing = x; st.active = x; render();
+    await new Promise((r) => setTimeout(r, 1100));
+    s.fixed.push(x); st.fixing = null; render();
+    await new Promise((r) => setTimeout(r, 350));
+  }
+  s.status = 'done';
+  s.pr = { n: 24, title: `fix(security): ${F[todo[0]].title}${todo.length > 1 ? ` 외 ${todo.length - 1}건` : ''} 수정`, add: todo.reduce((n, x) => n + F[x].diff.filter((d) => d[0] === '+').length, 0), del: todo.reduce((n, x) => n + F[x].diff.filter((d) => d[0] === '-').length, 0), files: new Set(todo.map((x) => F[x].path)).size, merged: false };
+  render();
+}
+// 선택한 취약점마다 백엔드에 수정안을 요청해 받아 오고, 받은 수정안으로 PR 을 연다
+async function runFixLive(id) {
+  const s = SCANS[id], st = S.rep[id];
+  const todo = s.findings.filter((x) => st.sel.has(x));
+  const num = id.slice(2);
+  liveBusy = true; S.err = '';
+  s.status = 'fixing'; s.fixed = [];
+  render();
+  const fixIds = [];
+  // 수정안은 한꺼번에 요청해 두고, 화면에서는 하나씩 받아 보여 준다
+  await Promise.all(todo.filter((x) => F[x].fixId === undefined).map((x) => fetch(`/api/v1/findings/${x.slice(2)}/fixes`, { method: 'POST' }).catch(() => {})));
+  // 백엔드는 고칠 수 없는 취약점에는 수정안을 끝내 만들지 않는다. 전체 90초, 하나라도 받은 뒤로는 20초까지만 기다린다
+  const until = Date.now() + 90000;
+  let lastArrival = 0;
+  for (const x of todo) {
+    st.fixing = x; st.active = x; render();
+    try {
+      while (F[x].fixId === undefined && Date.now() < until && !(lastArrival && Date.now() - lastArrival > 20000)) {
+        await sleep(2000);
+        const res = await fetch(`/api/app/findings/${x.slice(2)}`);
+        if (res.ok) F[x] = await res.json();
+      }
+      if (F[x].fixId !== undefined) { fixIds.push(F[x].fixId); s.fixed.push(x); lastArrival = Date.now(); }
+    } catch {}
+    st.fixing = null; render();
+    await sleep(350);
+  }
+  const fail = (msg) => { s.status = 'scanned'; delete s.fixed; S.err = msg; liveBusy = false; render(); };
+  if (!fixIds.length) return fail('수정안을 만들지 못했어요');
+  let pr;
+  try {
+    const res = await fetch(`/api/v1/scans/${num}/pull-requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fix_ids: fixIds }) });
+    if (!res.ok) throw new Error();
+    pr = await res.json();
+    for (const until = Date.now() + 90000; pr.status === 'pending' && Date.now() < until;) {
+      await sleep(2500);
+      pr = (await fetch(`/api/v1/scans/${num}/pull-requests`).then((r) => r.json()).catch(() => [])).find((p) => p.id === pr.id) ?? pr;
+    }
+  } catch {}
+  if (pr?.status !== 'created') return fail(pr?.status === 'pending' ? 'PR 이 아직 만들어지는 중이에요' : 'PR 을 열지 못했어요');
+  const rows = s.fixed.flatMap((x) => F[x].diff);
+  s.status = 'done';
+  s.pr = { n: pr.pr_number, title: `fix(security): ${F[s.fixed[0]].title}${s.fixed.length > 1 ? ` 외 ${s.fixed.length - 1}건` : ''} 수정`, add: rows.filter((d) => d[0] === '+').length, del: rows.filter((d) => d[0] === '-').length, files: new Set(s.fixed.map((x) => F[x].path)).size, merged: false, url: pr.pr_url };
+  liveBusy = false;
+  render();
+}
+function legacyScan(id) {
+  const s = SCANS[id];
+  if (!s) return notFound();
+  // 아직 도는 스캔은 스캔 연출 화면에서 본다
+  if (LIVE && (s.status === 'queued' || s.status === 'scanning')) setTimeout(() => location.href = scanUrl(s.repo, s.branch, id.slice(2)));
+  const r = repoBy(s.repo);
+  return frame(s.repo, `<a href="#/">홈</a><span class="sep">/</span><a href="#/repo/${s.repo}">${r.name}</a><span class="sep">/</span><b class="mono" style="font-weight:400;font-size:12.5px">${id}</b>`,
+    `<div class="wrap page"><div class="card empty" style="padding:56px 16px"><div class="fig" style="width:64px;height:60px">${char(s.status === 'failed' ? 'idle' : 'happy')}</div>
+      <h2 style="font-size:16px">${s.status === 'failed' ? esc(s.msg) : foundOf(s) ? `${fixedOf(s)}개를 고쳤어요` : '문제를 찾지 못했어요'}</h2>
+      <span class="dim">${s.branch} · ${s.scope} · ${s.ago}</span>
+      <a class="btn sm" href="#/new/${s.repo}" style="margin-top:6px">다시 스캔</a></div></div>`);
+}
+
+// ───────── 5. 레포 상세 (Vercel Deployments) ─────────
+function repoPage(repoFull) {
+  const r = repoBy(repoFull);
+  if (!r) return notFound();
+  const scans = Object.entries(SCANS).filter(([, s]) => s.repo === repoFull);
+  const s0 = latest(r);
+  const openF = s0?.status === 'scanned' ? s0.findings : s0?.findings ? s0.findings.filter((x) => !(s0.fixed ?? []).includes(x)) : [];
+  const prs = scans.filter(([, s]) => s.pr);
+  const tabs = [['scans', '스캔 기록', scans.length], ['open', '열린 취약점', openF.length], ['prs', 'PR', prs.length]];
+  let body;
+  if (S.tab === 'open') {
+    body = openF.length ? `<div class="list">${openF.map((x) => `<a class="row" href="#/scan/${r.last}"><span class="ico red">${ic('bug')}</span><div class="grow"><div class="t">${esc(F[x].title)}</div><div class="s mono" style="font-size:11.5px">${esc(F[x].path)}:${F[x].line}</div></div><span class="chip red">뚫림</span></a>`).join('')}</div>`
+      : `<div class="list"><div class="empty"><div class="fig" style="width:52px;height:48px">${char('happy')}</div>열린 취약점이 없어요</div></div>`;
+  } else if (S.tab === 'prs') {
+    body = prs.length ? `<div class="list">${prs.map(([id, s]) => `<a class="row" href="#/scan/${id}"><span class="ico green">${ic('pr')}</span><div class="grow"><div class="t">#${s.pr.n} ${esc(s.pr.title ?? `fix(security): ${fixedOf(s)}건 수정`)}</div><div class="s">${s.ago} · ${fixedOf(s)}개 고침</div></div><span class="chip ${s.pr.merged ? 'gray' : 'green'}">${s.pr.merged ? '머지됨' : '열림'}</span></a>`).join('')}</div>`
+      : `<div class="list"><div class="empty">아직 PR 이 없어요</div></div>`;
+  } else {
+    body = scans.length ? `<div class="list hist">${scans.map(([id, s]) => `<div class="tr" data-act="go" data-v="#/scan/${id}">
+        <span>${statusEl(s)}</span>
+        <div style="min-width:0"><div class="id">${id}</div><div class="sub">${s.scope}</div></div>
+        <span class="br c-br">${ic('branch')}${s.branch}<span class="dim">@${s.commit}</span></span>
+        <span class="c-res" style="font-size:12.5px">${s.status === 'failed' ? `<span class="dim">${esc(s.msg)}</span>` : `${foundOf(s)} 발견 <span class="dim">·</span> <span class="${fixedOf(s) ? 'green' : 'dim'}">${fixedOf(s)} 막음</span>`}</span>
+        <span class="dim c-dur" style="text-align:right;font-size:12.5px">${s.ago}</span>
+      </div>`).join('')}</div>`
+      : `<div class="list"><div class="empty"><div class="fig" style="width:56px;height:52px">${char('idle')}</div>아직 스캔한 적이 없어요<a class="btn sm primary" href="#/new/${repoFull}" style="margin-top:4px">첫 스캔 시작</a></div></div>`;
+  }
+  return frame(repoFull, `<a href="#/">홈</a><span class="sep">/</span><b>${r.name}</b>`, `<div class="wrap page">
+    <div class="head"><div>
+      <h1 style="display:flex;align-items:center;gap:10px"><span class="muted" style="font-weight:400">${r.ws} /</span> ${r.name}${r.private ? '<span class="private">Private</span>' : ''}</h1>
+      <p style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${r.desc ? `<span>${esc(r.desc)}</span>` : ''}<span class="lang"><i style="background:${LANG[r.lang]}"></i>${r.lang}</span><span class="br">${ic('branch')}${r.branch}</span><span class="dim">${r.pushed} 푸시</span></p>
+    </div><span class="sp"></span>
+      <a class="btn" href="https://github.com/${esc(repoFull)}" target="_blank" rel="noopener">${ghIcon}GitHub</a>
+      <a class="btn primary" href="#/new/${repoFull}">${ic('scan')}새 스캔</a>
+    </div>
+    <div class="tabs">${tabs.map(([v, l, n]) => `<button class="${S.tab === v ? 'on' : ''}" data-act="tab" data-v="${v}">${l}<span class="dim">${n}</span></button>`).join('')}</div>
+    ${body}
+  </div>`);
+}
+function notFound() {
+  return frame('', '', `<div class="wrap"><div class="empty"><div class="fig" style="width:56px;height:52px">${char('idle')}</div>찾을 수 없어요<a class="btn sm" href="#/">홈으로</a></div></div>`);
+}
+
+// ───────── ⌘K ─────────
+function palItems() {
+  const q = S.pal.q.trim().toLowerCase();
+  const acts = [
+    { g: '동작', label: '새 스캔', icon: 'plus', href: '#/new', kbd: 'N' },
+    { g: '동작', label: '홈', icon: 'home', href: '#/' },
+    { g: '동작', label: '스캔 데모 열기 (기존)', icon: 'play', href: '/demo' },
+  ];
+  const repos = REPOS.map((r) => ({ g: '레포', label: full(r), icon: 'repo', href: `#/repo/${full(r)}`, lang: r.lang }));
+  return [...acts, ...repos].filter((x) => x.label.toLowerCase().includes(q));
+}
+function palette() {
+  if (!S.pal.open) return '';
+  return `<div class="ov" data-act="palclose"><div class="pal" data-stop>
+    <div class="pi">${ic('scan')}<input id="pq" placeholder="레포로 이동하거나 동작 실행…" value="${esc(S.pal.q)}" autocomplete="off"></div>
+    <div class="pl" id="pl">${palList()}</div>
+    <div class="pf"><span><kbd>↑↓</kbd> 이동</span><span><kbd>↵</kbd> 열기</span><span><kbd>esc</kbd> 닫기</span></div>
+  </div></div>`;
+}
+function palList() {
+  const items = palItems();
+  if (!items.length) return `<div class="empty" style="padding:24px">결과가 없어요</div>`;
+  S.pal.i = Math.min(S.pal.i, items.length - 1);
+  let g = '';
+  return items.map((x, i) => (x.g !== g ? `<h6>${(g = x.g)}</h6>` : '') + `<div class="it ${i === S.pal.i ? 'on' : ''}" data-act="palgo" data-v="${x.href}">${x.lang ? `<span class="lang" style="width:16px;justify-content:center"><i style="background:${LANG[x.lang]}"></i></span>` : ic(x.icon)}${esc(x.label)}${x.kbd ? `<kbd>${x.kbd}</kbd>` : ''}</div>`).join('');
+}
+
+// ───────── 라우터 · 이벤트 ─────────
+const app = document.getElementById('app');
+function route() {
+  const [, page, ...rest] = (location.hash || '#/').slice(1).split('/');
+  const arg = rest.join('/');
+  if (!page) return dashboard();
+  if (page === 'new') return arg ? configPage(arg) : importPage();
+  if (page === 'repo') return repoPage(arg);
+  if (page === 'scan') return reportPage(arg);
+  return notFound();
+}
+function render() {
+  const y = document.getElementById('scroll')?.scrollTop ?? 0;
+  const same = render.last === location.hash;
+  app.innerHTML = route() + palette();
+  if (same) document.getElementById('scroll').scrollTop = y;
+  // 같은 화면 안의 다시 그리기에서는 등장 애니메이션을 끈다
+  if (same) app.querySelectorAll('.page > *').forEach((el) => el.style.animation = 'none');
+  render.last = location.hash;
+  refreshLive();
+  if (S.pal.open) { const i = document.getElementById('pq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+}
+window.addEventListener('hashchange', () => { S.menu = null; S.tab = 'scans'; S.safeOpen = false; S.err = ''; render(); });
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-act]');
+  if (S.menu && !e.target.closest('.pick')) { S.menu = null; render(); }
+  if (!t) return;
+  if (e.target.closest('[data-stop]') && t.dataset.act === 'go') return;
+  if (t.dataset.act === 'palclose' && e.target.closest('.pal')) return;
+  const v = t.dataset.v, v2 = t.dataset.v2;
+  const A = {
+    noop: () => e.preventDefault(),
+    go: () => location.hash = v,
+    menu: () => { S.menu = S.menu === v ? null : v; render(); },
+    ws: () => { S.ws = v; S.menu = null; render(); },
+    filter: () => { S.filter = v; document.getElementById('rows').innerHTML = repoRows(); document.querySelectorAll('[data-act=filter]').forEach((b) => b.classList.toggle('on', b.dataset.v === v)); },
+    pal: () => { S.pal = { open: true, q: '', i: 0 }; render(); },
+    palclose: () => { S.pal.open = false; render(); },
+    palgo: () => { S.pal.open = false; v.startsWith('#') ? (location.hash === v ? render() : location.hash = v) : window.open(v, '_blank'); render(); },
+    branch: () => { S.cfg.branch = v; S.menu = null; render(); },
+    preset: () => { applyPreset(v); render(); },
+    fold: () => { const o = S.cfg.open; o.has(v) ? o.delete(v) : o.add(v); render(); },
+    foldall: () => { const c = S.cfg; c.open = c.open.size > 4 ? new Set() : new Set(Object.values(NODES).filter((n) => n.c).map((n) => n.path)); render(); },
+    tick: () => {
+      const c = S.cfg, n = NODES[v];
+      const ex = excluded(n);
+      if (ex) { for (let p = n; p; p = p.parent) if (p.x) c.inc.add(p.path); leaves(n).forEach((l) => c.sel.add(l.path)); }
+      else { const on = boxState(n).st === 'on'; leaves(n).filter((l) => !excluded(l)).forEach((l) => on ? c.sel.delete(l.path) : c.sel.add(l.path)); }
+      c.preset = 'custom'; render();
+    },
+    opt: () => { S.cfg[v] = !S.cfg[v]; document.getElementById('sum').innerHTML = cfgSummary(); },
+    start: () => startBoot(),
+    tab: () => { S.tab = v; render(); },
+    pickf: () => { S.rep[v2].active = v; render(); },
+    self: () => { e.stopPropagation(); const s = S.rep[v2].sel; s.has(v) ? s.delete(v) : s.add(v); render(); },
+    selall: () => { const st = S.rep[v2]; st.sel = st.sel.size === SCANS[v2].findings.length ? new Set() : new Set(SCANS[v2].findings); render(); },
+    fix: () => runFix(v),
+    safe: () => { S.safeOpen = !S.safeOpen; render(); },
+  };
+  A[t.dataset.act]?.();
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'q') { S.q = e.target.value; document.getElementById('rows').innerHTML = repoRows(); }
+  if (e.target.id === 'iq') { S.iq = e.target.value; document.getElementById('irows').innerHTML = importRows(); }
+  if (e.target.id === 'pq') { S.pal.q = e.target.value; S.pal.i = 0; document.getElementById('pl').innerHTML = palList(); }
+});
+document.addEventListener('keydown', (e) => {
+  const typing = /INPUT|TEXTAREA/.test(document.activeElement?.tagName);
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); S.pal = { open: !S.pal.open, q: '', i: 0 }; return render(); }
+  if (S.pal.open) {
+    const items = palItems();
+    if (e.key === 'Escape') { S.pal.open = false; return render(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); S.pal.i = (S.pal.i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length; document.getElementById('pl').innerHTML = palList(); return; }
+    if (e.key === 'Enter' && items[S.pal.i]) { document.querySelector('.it.on')?.click(); }
+    return;
+  }
+  if (e.key === 'Escape' && S.menu) { S.menu = null; return render(); }
+  if (typing) { if (e.key === 'Escape') document.activeElement.blur(); return; }
+  if (e.key === 'n' || e.key === 'N') location.hash = '#/new';
+  if (e.key === '/') { const q = document.getElementById('q') || document.getElementById('iq'); if (q) { e.preventDefault(); q.focus(); } }
+});
+
+if (LIVE) {
+  app.innerHTML = `<div class="boot" style="position:fixed"><div class="fig">${char('sniff')}</div><div class="foot">레포를 불러오는 중…</div></div>`;
+  loadLive().then(render, (e) => {
+    app.innerHTML = `<div class="boot" style="position:fixed"><div class="fig">${char('idle')}</div><div class="foot"><span class="red">${esc(e.message)}</span> · <a href="/dashboard">다시 시도</a></div></div>`;
+  });
+} else render();
+</script>
+</body>
+</html>

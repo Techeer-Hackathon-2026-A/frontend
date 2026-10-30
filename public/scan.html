@@ -145,6 +145,8 @@
   .card[data-sev="medium"] .dot { background: var(--muted); }
   .card[data-sev="low"] .dot, .card[data-sev="info"] .dot { background: var(--faint); }
   .line.gap .ln, .line.gap .src { color: var(--faint); }
+  .summary .sub { display: block; margin-top: 10px; text-align: center; font-size: 12.5px; color: var(--muted); }
+  .summary .sub:hover { color: var(--text); }
   .primary { height: 36px; padding: 0 16px; border-radius: 999px; background: var(--text); color: #08090a; font-weight: 500; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; transition: transform .15s, opacity .2s; }
   .primary:hover { transform: translateY(-1px); }
   .primary:disabled { opacity: .7; cursor: default; transform: none; }
@@ -253,6 +255,7 @@
         <div class="sum-n" id="sumN">0</div>
         <div class="sum-l" id="sumL"></div>
         <button class="primary" id="fixBtn">모두 고치고 PR 열기</button>
+        <a class="sub" id="reportLink" href="/" target="_top" hidden>보고서 보기 →</a>
       </div>
     </aside>
   </main>
@@ -886,6 +889,8 @@ const scanId = params.get('id') || '';
 const feed = params.get('feed');
 const back = params.get('back') || '/dashboard';
 $('backLink').href = $('introBack').href = back;
+// 실제 스캔은 대시보드의 스캔 보고서로 이어진다
+if (params.get('report')) { $('reportLink').href = params.get('report'); $('reportLink').hidden = false; }
 const api = `/api/scans/${encodeURIComponent(scanId)}`;
 let live;
 

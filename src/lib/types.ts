@@ -52,15 +52,3 @@ export type ScanEvent =
   | { type: "pr.created"; number: number; url: string; title: string }
   /** 어느 단계에서든 더 진행할 수 없을 때 */
   | { type: "scan.failed"; message: string };
-
-/** 대시보드 목록용 스캔 요약. 백엔드가 아는 만큼만 채우면 되고, 없는 필드는 화면에서 숨긴다 */
-export interface ScanSummary {
-  id: string;
-  repo: string;
-  branch: string;
-  status: "queued" | "scanning" | "scanned" | "fixing" | "done" | "failed";
-  createdAt: string;
-  findings?: number;
-  fixed?: number;
-  pr?: { number: number; url: string };
-}

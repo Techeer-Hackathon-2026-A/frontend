@@ -60,7 +60,7 @@ export async function getProjects(): Promise<Record<string, string>> {
   return (await readSession())?.projects ?? {};
 }
 
-/** 서버 액션에서만 부를 수 있다 (쿠키를 다시 쓴다) */
+/** 서버 액션·라우트 핸들러에서만 부를 수 있다 (쿠키를 다시 쓴다) */
 export async function rememberProject(projectId: number, repo: string) {
   const session = await readSession();
   if (!session) return;

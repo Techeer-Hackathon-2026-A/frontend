@@ -166,7 +166,7 @@ createServer(async (req, res) => {
     if (req.method === 'POST') {
       const { fix_ids } = await readBody(req)
       if (!fix_ids?.length) return send(res, 400, { detail: '수정안을 하나 이상 선택하세요' })
-      const pr = { id: prs.length + 1, scan_id: scanId, branch_name: `security-fix/scan-${scanId}-${prs.length + 1}`, pr_number: null, pr_url: null, status: 'pending', created_at: now() }
+      const pr = { id: prs.length + 1, scan_id: scanId, branch_name: `security-fix/scan-${scanId}-${prs.length + 1}`, pr_number: null, pr_url: null, status: 'pending', created_at: now(), fix_ids, error_message: null }
       prs.push(pr)
       setTimeout(() => {
         Object.assign(pr, { status: 'created', pr_number: 40 + pr.id, pr_url: `https://github.com/OWASP/NodeGoat/pull/${40 + pr.id}` })

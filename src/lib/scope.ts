@@ -1,4 +1,4 @@
-// 새 스캔 ② 범위 설정 (prototype/index.html 의 configPage). 서버·클라이언트 공용.
+// 새 스캔 ② 범위 설정(public/app.html 의 configPage)에 넣을 파일 트리. 서버에서 lib/appData.ts 가 쓴다.
 // 파일 목록(GitHub git tree 또는 둘러보기 샘플)을 3단 체크 트리로 만들고, 기본 제외·위험 태그를 붙인다.
 
 /** 트리 재료. files 는 node_modules 처럼 통째로 접어 보여 줄 폴더의 파일 수 */
@@ -21,12 +21,6 @@ export interface ScopeNode {
   tags: string[];
   /** 기본 제외 이유. 제외된 노드 자신에만 붙는다 */
   exclude?: string;
-}
-
-export interface Branch {
-  name: string;
-  commit: string;
-  isDefault?: boolean;
 }
 
 const EXCLUDE_DIRS: Record<string, string> = {
@@ -102,23 +96,4 @@ export function buildTree(entries: TreeEntry[]): ScopeNode[] {
       })
       .sort((a, b) => Number(!a.children) - Number(!b.children) || a.name.localeCompare(b.name));
   return walk(root, "", 0);
-}
-
-/** 선택 단위. 접힌 폴더(node_modules 등)는 그 자체가 하나의 잎이다 */
-export function leaves(n: ScopeNode): ScopeNode[] {
-  return n.children?.length ? n.children.flatMap(leaves) : [n];
-}
-
-/** 체크한 잎을 백엔드에 보낼 경로로 줄인다. 폴더 안이 전부 골라졌고 제외된 것도 없으면 폴더 하나로 */
-export function compactPaths(nodes: ScopeNode[], picked: (n: ScopeNode) => boolean, excluded: (n: ScopeNode) => boolean): string[] {
-  return nodes.flatMap((n) => {
-    const ls = leaves(n);
-    if (n.children?.length && ls.every((l) => picked(l) && !excluded(l))) return [n.path];
-    return n.children?.length ? compactPaths(n.children, picked, excluded) : picked(n) ? [n.path] : [];
-  });
-}
-
-/** paths(파일 또는 폴더 경로) 범위 안의 파일인지. 비어 있으면 전체 */
-export function inScope(path: string, paths: string[] | undefined) {
-  return !paths?.length || paths.some((p) => path === p || path.startsWith(`${p}/`));
 }

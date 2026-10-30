@@ -1,5 +1,4 @@
 import "server-only";
-import type { ScanSummary } from "@/lib/types";
 
 // 팀 백엔드(FastAPI, /api/v1) 서버 호출. 브라우저 쪽 호출은 next.config 의 /api/v1 rewrite 로 같은 백엔드에 간다.
 // 백엔드 스키마는 src/lib/api/types.ts (백엔드 app/schemas/api.py 와 1:1).
@@ -30,46 +29,21 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-interface ScanOut {
+/** 백엔드 GET. 실패하면 BackendError */
+export async function backendGet<T>(path: string): Promise<T> {
+  return json<T>(await backendFetch(path));
+}
+
+export interface ScanOut {
   id: number;
   project_id: number;
   status: "pending" | "cloning" | "detecting" | "classifying" | "fixing" | "completed" | "failed";
   branch: string | null;
   commit_sha: string | null;
   summary: { total?: number } | null;
+  error_message: string | null;
   created_at: string;
-}
-
-const STATUS: Record<ScanOut["status"], ScanSummary["status"]> = {
-  pending: "queued",
-  cloning: "scanning",
-  detecting: "scanning",
-  classifying: "scanning",
-  fixing: "scanning",
-  completed: "scanned",
-  failed: "failed",
-};
-
-/**
- * 대시보드용 스캔 목록. 백엔드 ScanOut 에는 레포 이름이 없어서 projects(project_id → owner/name)로 채운다.
- * 백엔드가 없거나 실패하면 빈 목록 — 대시보드가 스캔 기록 없이도 열려야 해서다
- */
-export async function listScans(projects: Record<string, string>): Promise<ScanSummary[]> {
-  let scans: ScanOut[];
-  try {
-    scans = await json<ScanOut[]>(await backendFetch("/scans"));
-  } catch {
-    return [];
-  }
-  return scans.map((s) => ({
-    id: String(s.id),
-    repo: projects[s.project_id] ?? `스캔 #${s.id}`,
-    branch: s.branch ?? s.commit_sha?.slice(0, 7) ?? "",
-    status: STATUS[s.status],
-    // 백엔드는 시간대 없이 UTC 를 줄 수 있다
-    createdAt: /[zZ]$|[+-]\d\d:?\d\d$/.test(s.created_at) ? s.created_at : `${s.created_at}Z`,
-    ...(s.status === "completed" && typeof s.summary?.total === "number" && { findings: s.summary.total }),
-  }));
+  finished_at: string | null;
 }
 
 /** 레포 링크로 스캔을 요청한다. 백엔드는 브랜치 전체를 스캔한다 (범위 paths 는 아직 받지 않는다) */

@@ -1,7 +1,9 @@
 import "server-only";
 import type { User } from "@/lib/session";
 
-const API = "https://api.github.com";
+// 테스트할 때는 GITHUB_API_URL 로 흉내 서버를 가리킬 수 있다
+export const GITHUB_API = (process.env.GITHUB_API_URL || "https://api.github.com").replace(/\/$/, "");
+const API = GITHUB_API;
 
 export interface Repo {
   fullName: string;

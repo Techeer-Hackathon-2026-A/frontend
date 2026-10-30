@@ -96,6 +96,8 @@ export interface PullRequest {
   pr_url: string | null;
   status: "pending" | "created" | "failed";
   created_at: string;
+  fix_ids: number[];
+  error_message: string | null;
 }
 
 export interface TaskAccepted {
