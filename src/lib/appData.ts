@@ -1,7 +1,7 @@
 import "server-only";
 import type { Finding, FindingDetail, Fix, PullRequest, SecurityReport } from "@/lib/api/types";
 import { backendGet, type ScanOut } from "@/lib/backend";
-import { listRepos, getRepoScope, blameLine } from "@/lib/github";
+import { listRepos, getRepoScope } from "@/lib/github";
 import { buildTree, type ScopeNode } from "@/lib/scope";
 import type { User } from "@/lib/session";
 
@@ -23,19 +23,6 @@ export interface AppFinding {
   recheck?: { kind: "log"; lines: string[]; ok: boolean };
   diff: DiffRow[];
   fixId?: number;
-  /** 이 줄을 마지막으로 바꾼 커밋 — 누가, 어떤 커밋·PR 에서 넣었는지 */
-  who?: AppBlame;
-}
-
-export interface AppBlame {
-  name: string;
-  login: string | null;
-  avatar: string | null;
-  sha: string;
-  msg: string;
-  ago: string;
-  url: string;
-  pr: { n: number; title: string; url: string } | null;
 }
 
 export interface AppScan {
@@ -150,25 +137,8 @@ const STATUS: Record<ScanOut["status"], AppScan["status"]> = {
   failed: "failed",
 };
 
-/** 스캔한 커밋 기준으로 취약한 줄을 넣은 커밋을 찾는다. 못 찾으면 비워 둔다 */
-async function whoOf(token: string, repo: string, ref: string, f: Finding): Promise<AppBlame | undefined> {
-  if (!ref) return undefined;
-  const c = await blameLine(token, repo, ref, f.file_path, f.start_line);
-  if (!c) return undefined;
-  return {
-    name: c.author.name,
-    login: c.author.login,
-    avatar: c.author.avatarUrl,
-    sha: c.sha.slice(0, 7),
-    msg: c.message,
-    ago: ago(c.date),
-    url: c.url,
-    pr: c.pr && { n: c.pr.number, title: c.pr.title, url: c.pr.url },
-  };
-}
-
 /** 완료된 스캔은 우선 조치 대상·수정안·PR 까지 불러와 프로토타입 SCANS 한 칸으로 */
-async function loadScan(token: string, s: ScanOut, repo: string, F: Record<string, AppFinding>): Promise<AppScan> {
+async function loadScan(s: ScanOut, repo: string, F: Record<string, AppFinding>): Promise<AppScan> {
   const scan: AppScan = {
     repo,
     branch: s.branch ?? "",
@@ -188,12 +158,8 @@ async function loadScan(token: string, s: ScanOut, repo: string, F: Record<strin
   ]);
   if (!report.top_findings.length) return { ...scan, status: "done", found: 0 };
 
-  const ref = s.commit_sha || s.branch || "";
-  const [fixes, whos] = await Promise.all([
-    Promise.all(report.top_findings.map((f) => firstFix(f.id))),
-    Promise.all(report.top_findings.map((f) => whoOf(token, repo, ref, f).catch(() => undefined))),
-  ]);
-  report.top_findings.forEach((f, i) => (F[`f_${f.id}`] = { ...findingEntry(f, fixes[i]), ...(whos[i] && { who: whos[i] }) }));
+  const fixes = await Promise.all(report.top_findings.map((f) => firstFix(f.id)));
+  report.top_findings.forEach((f, i) => (F[`f_${f.id}`] = findingEntry(f, fixes[i])));
   const findings = report.top_findings.map((f) => `f_${f.id}`);
   const pr = prs.find((p) => p.status === "created") ?? prs.find((p) => p.status === "pending");
   if (!pr) return { ...scan, findings };
@@ -213,7 +179,7 @@ export async function loadAppData(token: string, user: User, projects: Record<st
     .slice(0, 30);
 
   const F: Record<string, AppFinding> = {};
-  const loaded = await Promise.all(known.map((s) => loadScan(token, s, projects[s.project_id], F).catch(() => null)));
+  const loaded = await Promise.all(known.map((s) => loadScan(s, projects[s.project_id], F).catch(() => null)));
   const SCANS: Record<string, AppScan> = {};
   const last = new Map<string, string>();
   known.forEach((s, i) => {
