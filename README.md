@@ -23,7 +23,7 @@ npm run dev             # http://localhost:5173
 개발 서버는 `/api` 요청을 `http://localhost:8000`(백엔드)로 프록시합니다. 백엔드를 먼저 띄워 두세요.
 백엔드 API 문서: http://localhost:8000/docs
 
-백엔드 없이 화면 흐름만 볼 때는 백엔드 대신 흉내 서버를 띄웁니다 (같은 8000 포트, 공개 레포 OWASP/NodeGoat 의 실제 취약 코드 4건).
+백엔드 없이 화면 흐름만 볼 때는 백엔드 대신 흉내 서버를 띄웁니다 (같은 8000 포트, 공개 레포 OWASP/NodeGoat 의 실제 취약 코드 4건, 스캔 약 4초·수정안 1~2초·PR 1~2초).
 
 ```bash
 npm run mock-backend    # http://localhost:8000/api/v1

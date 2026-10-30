@@ -1,7 +1,7 @@
 // 백엔드 API(app/api/v1) 를 흉내 내는 로컬 서버. 백엔드 없이 화면 흐름을 확인할 때 쓴다.
 //   npm run mock-backend   → http://localhost:8000 (vite 가 /api 를 여기로 보낸다)
 // 어떤 레포를 넣어도 공개 레포 OWASP/NodeGoat 의 실제 취약 코드 4건을 찾은 것처럼 답한다.
-// 스캔: 약 8초 동안 클론 → 탐지 → 분류 후 완료. 수정안: 요청 2~5초 뒤 생성. PR: 3초 뒤 생성.
+// 스캔: 약 4초 동안 클론 → 탐지 → 분류 후 완료. 수정안: 요청 1~2초 뒤 생성. PR: 1~2초 뒤 생성.
 import { createServer } from 'node:http'
 
 const PORT = 8000
@@ -74,7 +74,7 @@ const fixes = []
 const prs = []
 
 function scanStatus(scan) {
-  const k = Math.min(STEPS.length - 1, Math.floor((Date.now() - scan.startedAt) / 2000))
+  const k = Math.min(STEPS.length - 1, Math.floor((Date.now() - scan.startedAt) / 1000))
   return STEPS[k]
 }
 
@@ -155,7 +155,7 @@ createServer(async (req, res) => {
     if (req.method === 'POST') {
       // 실제 백엔드처럼 고칠 수 없는 취약점(코드가 없는 시크릿)은 수정안이 끝내 생기지 않는다
       if (f.fix) {
-        setTimeout(() => fixes.push({ id: fixes.length + 1, finding_id: f.id, file_path: f.file_path, created_at: now(), ...f.fix }), 2000 + Math.random() * 3000)
+        setTimeout(() => fixes.push({ id: fixes.length + 1, finding_id: f.id, file_path: f.file_path, created_at: now(), ...f.fix }), 1000 + Math.random() * 1000)
       }
       return send(res, 202, { task_id: `fix-${f.id}`, message: 'accepted' })
     }
@@ -174,7 +174,7 @@ createServer(async (req, res) => {
           const f = findings.find((x) => x.id === fixes[id - 1]?.finding_id)
           if (f) f.status = 'fixed'
         })
-      }, 3000)
+      }, 1000 + Math.random() * 1000)
       return send(res, 202, pr)
     }
     return send(res, 200, prs.filter((p) => p.scan_id === scanId).reverse())
