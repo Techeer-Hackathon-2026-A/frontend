@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import Character from "@/components/Character";
+import LinkScan from "./LinkScan";
 import LoginError from "./LoginError";
 
 // 로그인 전 첫 화면. 로그인돼 있으면 proxy 가 /dashboard 로 보낸다.
@@ -12,7 +13,13 @@ export default function Home() {
       <p className="-mt-2 max-w-[360px] text-[14px] text-muted">
         GitHub 레포의 취약점을 찾고, 실제 공격으로 확인하고, 고쳐서 PR 까지 올려요.
       </p>
-      <div className="mt-2 flex items-center gap-2">
+      <LinkScan />
+      <div className="flex w-full max-w-[440px] items-center gap-3 text-[12px] text-faint">
+        <span className="h-px flex-1 bg-line" />
+        또는
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      <div className="flex items-center gap-2">
         <a
           href="/api/auth/login"
           className="flex h-10 items-center gap-2 rounded-full bg-fg px-5 text-[14px] font-medium text-bg transition-transform hover:-translate-y-px"

@@ -6,7 +6,8 @@ export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (pathname === "/" && signedIn) return NextResponse.redirect(new URL("/dashboard", req.url));
-  if (pathname !== "/" && !signedIn) return NextResponse.redirect(new URL("/", req.url));
+  // 스캔 화면은 로그인 없이 링크로 시작한 공개 레포 스캔도 보여 준다
+  if (pathname !== "/" && !pathname.startsWith("/scans/") && !signedIn) return NextResponse.redirect(new URL("/", req.url));
   return NextResponse.next();
 }
 

@@ -50,6 +50,8 @@
   .status.done i { background: var(--text); }
   .icon-btn { height: 28px; min-width: 28px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--border); font: 12px var(--mono); color: var(--muted); display: grid; place-items: center; }
   .icon-btn:hover { color: var(--text); background: var(--panel-2); }
+  .icon-btn:disabled { opacity: .4; pointer-events: none; }
+  .icon-btn.on { color: var(--text); background: var(--panel-2); border-color: var(--text); }
 
   main { display: grid; grid-template-columns: 232px minmax(0, 1fr) 312px; min-height: 0; }
 
@@ -147,6 +149,7 @@
   .line.gap .ln, .line.gap .src { color: var(--faint); }
   .summary .sub { display: block; margin-top: 10px; text-align: center; font-size: 12.5px; color: var(--muted); }
   .summary .sub:hover { color: var(--text); }
+  .summary .sub[hidden] { display: none; }
   .primary { height: 36px; padding: 0 16px; border-radius: 999px; background: var(--text); color: #08090a; font-weight: 500; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; transition: transform .15s, opacity .2s; }
   .primary:hover { transform: translateY(-1px); }
   .primary:disabled { opacity: .7; cursor: default; transform: none; }
@@ -212,6 +215,9 @@
     <span class="spacer"></span>
     <span class="status" id="status"><i></i><span id="statusText">대기</span></span>
     <button class="icon-btn" id="speedBtn" title="속도 (F)">1×</button>
+    <button class="icon-btn" id="skipBtn" title="건너뛰기 (S)" disabled>
+      <svg width="12" height="10" viewBox="0 0 12 10"><path d="M1 1l5 4-5 4zM6 1l5 4-5 4z" fill="currentColor"/></svg>
+    </button>
     <button class="icon-btn" id="playBtn" title="일시정지 (Space)">
       <svg width="10" height="10" viewBox="0 0 10 10" id="playIcon"><path d="M2 1h2v8H2zM6 1h2v8H6z" fill="currentColor"/></svg>
     </button>
@@ -238,7 +244,7 @@
         </div>
       </div>
       <div class="progress"><i id="bar"></i></div>
-      <div class="keys"><span><kbd>Space</kbd> 정지</span><span><kbd>F</kbd> 속도</span></div>
+      <div class="keys"><span><kbd>Space</kbd> 정지</span><span><kbd>F</kbd> 속도</span><span><kbd>S</kbd> 건너뛰기</span></div>
 
       <div class="intro" id="intro">
         <div class="char big" style="position:static"><div class="tilt"><div class="fig"></div></div></div>
@@ -323,7 +329,7 @@ const els = {
   list: $('list'), empty: $('empty'), count: $('count'), summary: $('summary'),
   sumN: $('sumN'), sumL: $('sumL'), fixBtn: $('fixBtn'), intro: $('intro'),
   status: $('status'), statusText: $('statusText'), editor: $('editor'),
-  speedBtn: $('speedBtn'), playBtn: $('playBtn'), playIcon: $('playIcon'),
+  speedBtn: $('speedBtn'), skipBtn: $('skipBtn'), playBtn: $('playBtn'), playIcon: $('playIcon'),
 };
 
 document.querySelectorAll('.fig').forEach(f => f.append($('charSvg').content.cloneNode(true)));
@@ -349,7 +355,8 @@ const SEV = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', 
 
 // ---------- 상태 ----------
 // 파일 내용은 rows 로 관리한다: { text, kind: 'ctx'|'del'|'add', orig } — 수정 연출에서 줄이 지워지고 끼워진다
-let state, gen = 0, paused = false, speed = 1;
+// skip: 지금 단계(스캔·수정)의 연출을 건너뛰고 백엔드가 알려 준 데까지 바로 그린다
+let state, gen = 0, paused = false, speed = 1, skip = false;
 const SPEEDS = [1, 2, 4];
 
 function freshState() {
@@ -417,16 +424,18 @@ function setStatus(text, mode) {
   els.status.className = 'status ' + (mode || '');
 }
 
-// ---------- 시간 (일시정지·배속·중단 지원) ----------
-function sleep(ms) {
+// ---------- 시간 (일시정지·배속·건너뛰기·중단 지원) ----------
+// 건너뛰는 중에는 연출 대기를 없앤다. real 이면(백엔드 기다리기) 건너뛰어도 실제 시간만큼 기다린다
+function sleep(ms, real = false) {
   const g = gen;
+  if (skip && !real) return g !== gen ? Promise.reject('abort') : Promise.resolve();
   return new Promise((res, rej) => {
     let left = ms, last = performance.now();
     (function tick(now) {
       if (g !== gen) return rej('abort');
       if (!paused) left -= (now - last) * speed;
       last = now;
-      left <= 0 ? res() : requestAnimationFrame(tick);
+      left <= 0 || (skip && !real) ? res() : requestAnimationFrame(tick);
     })(last);
   });
 }
@@ -436,7 +445,7 @@ function restart(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.cl
 
 function placeChar(x, y, ms = 140) {
   state.cx = x; state.cy = y;
-  els.char.style.setProperty('--move', ms / speed + 'ms');
+  els.char.style.setProperty('--move', (skip ? 0 : ms / speed) + 'ms');
   els.char.style.transform = `translate(${x}px, ${y}px)`;
 }
 
@@ -516,6 +525,7 @@ function addCard(f) {
 }
 
 function flyBug(fromBox, card) {
+  if (skip) return Promise.resolve();
   const r0 = els.code.getBoundingClientRect();
   const x0 = r0.left + fromBox.x + fromBox.w / 2 - 11, y0 = r0.top + fromBox.y + 1;
   const r1 = card.getBoundingClientRect();
@@ -593,7 +603,7 @@ async function inspect(n, note) {
 
 /** 조건이 맞을 때까지 기다린다. 일시정지·중단(gen)을 sleep 과 똑같이 따른다 */
 async function until(cond) {
-  while (!cond()) await sleep(80);
+  while (!cond()) await sleep(80, true);
 }
 
 /** 백엔드가 이 파일에서 line(원본 줄 번호, 1부터)까지 살펴봤는지 */
@@ -606,6 +616,7 @@ async function run() {
   ++gen;
   reset();
   state.phase = 'running';
+  setSkip(false, true);
   els.intro.classList.add('out');
   els.spot.classList.add('on');
   try {
@@ -642,6 +653,7 @@ async function run() {
 
 function finish() {
   state.phase = 'done';
+  setSkip(false);
   els.spot.classList.remove('on');
   pose('happy');
   say('끝!');
@@ -664,7 +676,7 @@ function finish() {
 // ---------- 수정 시퀀스 ----------
 async function typeRow(n, row, text) {
   const src = lineEl(n).querySelector('.src');
-  for (let c = 0; c < text.length; c += 2) {
+  for (let c = 0; c < text.length && !skip; c += 2) {
     row.text = text.slice(0, c + 2);
     src.innerHTML = hl(row.text) + '<i class="caret"></i>';
     await sleep(16);
@@ -754,6 +766,7 @@ async function applyFix(f) {
 async function fixAll() {
   if (state.phase !== 'done') return;
   state.phase = 'fixing';
+  setSkip(false, true);
   els.fixBtn.disabled = true;
   els.fixBtn.textContent = '고치는 중…';
   els.spot.classList.add('on');
@@ -786,6 +799,7 @@ async function fixAll() {
     return;
   }
   els.spot.classList.remove('on');
+  setSkip(false);
   if (!live.pr) {
     // 수정안을 하나도 못 만들었거나 PR 을 열지 못했다. 결과 화면은 그대로 두고 이유만 알린다
     state.phase = 'ended';
@@ -833,7 +847,7 @@ function reset() {
   els.summary.classList.remove('show');
   els.fixBtn.className = 'primary';
   els.fixBtn.disabled = false;
-  els.fixBtn.textContent = '모두 고치고 PR 열기';
+  els.fixBtn.textContent = loginToFix ? 'GitHub 로 로그인하고 고치기' : '모두 고치고 PR 열기';
   els.fixBtn.hidden = false;
   say('');
   pose();
@@ -857,13 +871,29 @@ function cycleSpeed() {
   speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
   els.speedBtn.textContent = speed + '×';
 }
-els.fixBtn.onclick = () => (live.pr ? (feed === 'demo' ? replayDemo() : open(live.pr.url, '_blank', 'noopener')) : fixAll());
+/** 건너뛰기 상태와 버튼. usable 은 지금 단계에서 누를 수 있는지 */
+function setSkip(on, usable = on) {
+  skip = on;
+  els.skipBtn.classList.toggle('on', on);
+  els.skipBtn.disabled = !usable || on;
+  els.skipBtn.title = on ? '건너뛰는 중' : '건너뛰기 (S)';
+}
+function skipNow() {
+  if (skip || (state.phase !== 'running' && state.phase !== 'fixing')) return;
+  if (paused) togglePause();
+  setSkip(true);
+  say('');
+  showLens(NO_LENS);
+}
+els.fixBtn.onclick = () => (loginToFix ? (top.location.href = '/api/auth/login') : live.pr ? (feed === 'demo' ? replayDemo() : open(live.pr.url, '_blank', 'noopener')) : fixAll());
 els.playBtn.onclick = togglePause;
 els.speedBtn.onclick = cycleSpeed;
+els.skipBtn.onclick = skipNow;
 addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); togglePause(); }
   else if ((e.key === 'r' || e.key === 'R') && feed === 'demo') replayDemo();
   else if (e.key === 'f' || e.key === 'F') cycleSpeed();
+  else if (e.key === 's' || e.key === 'S') skipNow();
 });
 
 // 모노스페이스 글자 폭을 잰 뒤 시작 화면을 그린다
@@ -887,6 +917,8 @@ const params = new URLSearchParams(location.search);
 const scanId = params.get('id') || '';
 // demo: 로그인 없이 둘러보기. 녹화된 데모 레포 이벤트(demo-scan.json, scripts/build-demo-timeline.mjs)를 재생한다
 const feed = params.get('feed');
+// fix=login: 로그인 없이 링크로 시작한 스캔. 고치기·PR 은 로그인한 뒤에 한다
+const loginToFix = params.get('fix') === 'login';
 const back = params.get('back') || '/dashboard';
 $('backLink').href = $('introBack').href = back;
 // 실제 스캔은 대시보드의 스캔 보고서로 이어진다
@@ -985,6 +1017,7 @@ function fail(message) {
   if (message) live.failed = message;
   ++gen;
   if (state) state.phase = 'failed';
+  setSkip(false);
   els.spot.classList.remove('on');
   say('');
   pose('alert');
