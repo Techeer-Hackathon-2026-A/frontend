@@ -145,8 +145,6 @@
   .card[data-sev="medium"] .dot { background: var(--muted); }
   .card[data-sev="low"] .dot, .card[data-sev="info"] .dot { background: var(--faint); }
   .line.gap .ln, .line.gap .src { color: var(--faint); }
-  .summary .sub { display: block; margin-top: 10px; text-align: center; font-size: 12.5px; color: var(--muted); }
-  .summary .sub:hover { color: var(--text); }
   .primary { height: 36px; padding: 0 16px; border-radius: 999px; background: var(--text); color: #08090a; font-weight: 500; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; transition: transform .15s, opacity .2s; }
   .primary:hover { transform: translateY(-1px); }
   .primary:disabled { opacity: .7; cursor: default; transform: none; }
@@ -206,7 +204,7 @@
 <body>
 <div class="app">
   <header>
-    <a href="/" target="_top" id="backLink" title="처음으로" aria-label="처음으로" style="display: contents"><div class="logo"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1 10.5 3v3.2C10.5 8.7 8.6 10.6 6 11.2 3.4 10.6 1.5 8.7 1.5 6.2V3Z" fill="#08090a"/></svg></div></a>
+    <a href="/dashboard" target="_top" id="backLink" title="돌아가기" aria-label="돌아가기" style="display: contents"><div class="logo"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1 10.5 3v3.2C10.5 8.7 8.6 10.6 6 11.2 3.4 10.6 1.5 8.7 1.5 6.2V3Z" fill="#08090a"/></svg></div></a>
     <span class="crumb" id="crumb"></span>
     <span class="branch" id="branch"></span>
     <span class="spacer"></span>
@@ -243,8 +241,8 @@
       <div class="intro" id="intro">
         <div class="char big" style="position:static"><div class="tilt"><div class="fig"></div></div></div>
         <h1 id="introRepo"></h1>
-        <p id="introText">스캔 정보를 불러오는 중…</p>
-        <a class="back" id="introBack" href="/" target="_top" hidden>← 처음으로</a>
+        <p id="introText">레포를 불러오는 중…</p>
+        <a class="back" id="introBack" href="/dashboard" target="_top" hidden>← 대시보드로</a>
       </div>
     </section>
 
@@ -255,7 +253,6 @@
         <div class="sum-n" id="sumN">0</div>
         <div class="sum-l" id="sumL"></div>
         <button class="primary" id="fixBtn">모두 고치고 PR 열기</button>
-        <a class="sub" id="reportLink" href="/" target="_top">보고서 보기 →</a>
       </div>
     </aside>
   </main>
@@ -311,11 +308,9 @@
 
 <script>
 
-// demo.html 의 연출을 그대로 쓰되, 파일과 NOTES 를 이벤트(src/lib/scanEvents.ts 의 ScanEvent)로 채운다.
-// 이벤트는 부모 페이지(src/pages/ScanPage.tsx)가 백엔드 API 를 폴링해 window.patchiScan.push 로 넣어 준다.
-// 연출은 자기 속도로 걷고, 소식보다 앞서면 다음 소식이 올 때까지 그 줄에서 기다린다.
-// FILES[i].notes[줄 번호, 1부터] = { token, safe } | { token, finding }
-// FILES[i].nums[줄 index] = 원본 파일의 줄 번호 (파일 일부만 보여 줄 때. null 이면 생략 표시 줄)
+// demo/index.html 의 연출을 그대로 쓰되, 파일과 NOTES 를 백엔드 이벤트(web/src/lib/types.ts 의 ScanEvent)로 채운다.
+// 연출은 자기 속도로 걷고, 백엔드보다 앞서면 다음 소식이 올 때까지 그 줄에서 기다린다.
+// FILES[i].notes[원본 줄 번호] = { token, safe } | { token, finding }
 let FILES = [];
 
 const $ = id => document.getElementById(id);
@@ -394,10 +389,12 @@ function renderFile(i) {
   let num = 0, shift = 0;
   els.lines.innerHTML = f.rows.map(row => {
     const bad = s.bad.get(row), fixed = s.fixed.get(row);
+    // 파일 일부만 받았으면(f.nums) 원본 줄 번호를 보여 주고, 생략한 자리는 ⋯ 로 둔다
     const gap = row.kind === 'ctx' && f.nums && f.nums[row.orig] == null;
     const cls = ['line', row.kind !== 'ctx' && row.kind, gap && 'gap', s.seen.has(row) && 'seen', bad && 'bad', fixed && 'fixed', row.fresh && 'new'].filter(Boolean).join(' ');
     let ln;
-    if (row.kind === 'del') { ln = '−'; shift--; }
+    // 지운 줄 자리에서 새 줄 번호가 이어지게 한다
+    if (row.kind === 'del') { ln = '−'; num = (f.nums ? f.nums[row.orig] : row.orig + 1) + shift - 1; shift--; }
     else if (row.kind === 'add') { ln = ++num; shift++; }
     else if (gap) ln = '⋯';
     else ln = num = (f.nums ? f.nums[row.orig] : row.orig + 1) + shift;
@@ -596,7 +593,7 @@ async function until(cond) {
   while (!cond()) await sleep(80);
 }
 
-/** 이 파일에서 line(1부터)까지 살펴봤다는 소식이 왔는지 */
+/** 백엔드가 이 파일에서 line(원본 줄 번호, 1부터)까지 살펴봤는지 */
 function reached(f, line) {
   if (live.done.has(f.path) || live.finished || live.failed) return true;
   return Object.keys(f.notes).some(n => Number(n) >= line);
@@ -657,7 +654,7 @@ function finish() {
     els.sumL.textContent = '발견된 취약점이 없어요';
     els.fixBtn.hidden = true;
   }
-  // 다시 접속했는데 이미 고치기가 시작돼 있었다면 이어서 보여 준다
+  // 다시 접속해 처음부터 재생받았는데 이미 고치기가 시작돼 있었다면 이어서 보여 준다
   if (live.fixes.length || live.pr || live.fixEnd) fixAll();
 }
 
@@ -728,7 +725,7 @@ async function applyFix(f) {
   const n = rowsOf().indexOf(f.fixedRow);
   charOver(lineBox(n), 300);
   pose('sniff');
-  say('다시 확인…');
+  say(feed === 'demo' ? '다시 공격…' : '다시 확인…');
   showLens(lineBox(n), 'look');
   await sleep(700);
   await until(() => live.verify.has(f.id) || live.failed);
@@ -740,10 +737,10 @@ async function applyFix(f) {
     f.card.classList.add('fixed');
     f.card.querySelector('.sev').textContent = 'Fixed';
   } else {
-    // 백엔드 검증을 통과하지 못한 수정은 Fixed 로 바꾸지 않는다
+    // 고쳤는데도 같은 공격이 통하거나 검증을 통과하지 못하면 Fixed 로 바꾸지 않는다
     showLens(lineBox(n), 'hit');
     pose('alert');
-    say('아직 불안해');
+    say(feed === 'demo' ? '아직 뚫려' : '아직 불안해');
   }
   await sleep(750);
   say('');
@@ -757,10 +754,11 @@ async function fixAll() {
   els.fixBtn.disabled = true;
   els.fixBtn.textContent = '고치는 중…';
   els.spot.classList.add('on');
-  setStatus('수정안 만드는 중', 'live');
+  setStatus('수정 준비 중', 'live');
   if (!live.fixRequested && !live.fixes.length && !live.pr && !live.fixEnd) {
     live.fixRequested = true;
-    dispatchEvent(new CustomEvent('patchi:fix'));
+    const err = await requestFix();
+    if (err) return fail(err);
   }
   try {
     for (let k = 0; ; k++) {
@@ -777,7 +775,7 @@ async function fixAll() {
       }
       await applyFix(f);
     }
-    setStatus('PR 여는 중', 'live');
+    if (!live.pr) setStatus('PR 여는 중', 'live');
     await until(() => live.pr || live.fixEnd || live.failed);
     if (live.failed) return fail();
   } catch (e) {
@@ -785,13 +783,11 @@ async function fixAll() {
     return;
   }
   els.spot.classList.remove('on');
-  els.fixBtn.disabled = false;
   if (!live.pr) {
     // 수정안을 하나도 못 만들었거나 PR 을 열지 못했다. 결과 화면은 그대로 두고 이유만 알린다
     state.phase = 'ended';
     pose('alert');
     say('');
-    els.fixBtn.disabled = true;
     els.fixBtn.textContent = live.fixEndMessage;
     setStatus('PR 없음');
     return;
@@ -800,8 +796,9 @@ async function fixAll() {
   pose('happy');
   say('PR 보냈어!');
   setTimeout(() => { if (state.phase === 'fixed') { say(''); pose(); } }, 1800);
+  els.fixBtn.disabled = false;
   els.fixBtn.classList.add('done');
-  els.fixBtn.textContent = live.pr.number ? `PR #${live.pr.number} 열기 ↗` : 'PR 열기 ↗';
+  els.fixBtn.textContent = feed === 'demo' ? `PR #${live.pr.number} 생성됨 · 다시 보기 ↺` : live.pr.number ? `PR #${live.pr.number} 열기 ↗` : 'PR 열기 ↗';
   const fixed = state.findings.filter(f => f.card.classList.contains('fixed')).length;
   els.sumL.innerHTML = `${fixed} fixed · <span class="plus">+${state.added}</span> <span class="minus">−${state.removed}</span>`;
   setStatus('PR 생성됨', 'done');
@@ -857,11 +854,12 @@ function cycleSpeed() {
   speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
   els.speedBtn.textContent = speed + '×';
 }
-els.fixBtn.onclick = () => (live.pr ? open(live.pr.url, '_blank', 'noopener') : fixAll());
+els.fixBtn.onclick = () => (live.pr ? (feed === 'demo' ? replayDemo() : open(live.pr.url, '_blank', 'noopener')) : fixAll());
 els.playBtn.onclick = togglePause;
 els.speedBtn.onclick = cycleSpeed;
 addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+  else if ((e.key === 'r' || e.key === 'R') && feed === 'demo') replayDemo();
   else if (e.key === 'f' || e.key === 'F') cycleSpeed();
 });
 
@@ -876,13 +874,19 @@ document.fonts.ready.then(() => {
   reset();
   ready = true;
   queue.splice(0).forEach(onEvent);
+  connect();
 });
 
 // ---------- 이벤트 ----------
+// 실제 스캔: 부모 페이지(src/components/ScanFrame.tsx)가 팀 백엔드 REST API 를 폴링해 window.patchiScan.push 로 넣어 준다 (feed=manual).
+// 둘러보기: 녹화된 이벤트를 스스로 재생한다 (feed=demo).
 const params = new URLSearchParams(location.search);
-const back = params.get('back') || '/';
+const scanId = params.get('id') || '';
+// demo: 로그인 없이 둘러보기. 녹화된 데모 레포 이벤트(demo-scan.json, scripts/build-demo-timeline.mjs)를 재생한다
+const feed = params.get('feed');
+const back = params.get('back') || '/dashboard';
 $('backLink').href = $('introBack').href = back;
-$('reportLink').href = params.get('report') || back;
+const api = `/api/scans/${encodeURIComponent(scanId)}`;
 let live;
 
 function freshLive() {
@@ -892,7 +896,7 @@ live = freshLive();
 
 function setRepo(repo, branch) {
   const [owner, name] = (repo || '').split('/');
-  $('crumb').innerHTML = name ? `${esc(owner)} / <b>${esc(name)}</b>` : `<b>${esc(repo || '')}</b>`;
+  $('crumb').innerHTML = name ? `${esc(owner)} / <b>${esc(name)}</b>` : esc(repo || '');
   $('branch').textContent = branch || '';
   $('branch').hidden = !branch;
   $('introRepo').textContent = repo || '';
@@ -909,7 +913,7 @@ function onEvent(e) {
       setStatus(e.status, 'live');
       break;
     case 'scan.started': {
-      // 다시 접속하면 처음부터 다시 받는다. 그때도 처음부터 연출한다
+      // 다시 접속하면 백엔드가 처음부터 다시 보내 준다. 그때도 처음부터 연출한다
       live = freshLive();
       FILES = e.files.map(f => ({ path: f.path, lines: f.content.split('\n'), nums: f.nums || null, notes: {}, rows: [] }));
       setRepo(e.repo, e.branch);
@@ -933,12 +937,41 @@ function onEvent(e) {
     case 'fix.applied': live.fixes.push(e); break;
     case 'verify.result': live.verify.set(e.findingId, e.blocked); break;
     case 'fix.ended': live.fixEnd = 'ended'; live.fixEndMessage = e.message; break;
-    case 'pr.created': live.pr = e; break;
+    case 'pr.created': live.pr = e; es?.close(); break;
     case 'scan.failed':
       live.failed = e.message || '스캔에 실패했어요';
+      es?.close();
       // 연출이 돌고 있으면 그 루프가 실패를 보고 멈춘다
       if (!FILES.length || state.phase === 'idle') fail();
       break;
+  }
+}
+
+let es;
+
+function connect() {
+  // ?feed=manual 이면 서버에 붙지 않고 window.patchiScan.push(event) 로 이벤트를 받는다
+  if (feed === 'manual') return;
+  if (feed === 'demo') return playDemo();
+  if (!scanId) return fail('스캔 주소가 올바르지 않아요');
+  es = new EventSource(`${api}/events`);
+  es.onmessage = m => onEvent(JSON.parse(m.data));
+  // 서버가 200 이 아닌 응답을 주면 재연결 없이 닫힌다
+  es.onerror = () => {
+    if (es.readyState === EventSource.CLOSED && !live.pr && !live.failed) onEvent({ type: 'scan.failed', message: '스캔 서버에 연결할 수 없어요' });
+  };
+}
+
+async function requestFix() {
+  if (feed) {
+    dispatchEvent(new CustomEvent('patchi:fix'));
+    return '';
+  }
+  try {
+    const res = await fetch(`${api}/fix`, { method: 'POST', body: '{}' });
+    return res.ok ? '' : (await res.text()) || '수정 요청에 실패했어요';
+  } catch {
+    return '수정 요청에 실패했어요';
   }
 }
 
@@ -957,11 +990,33 @@ function fail(message) {
   els.intro.classList.remove('out');
 }
 
+let replayDemo = () => {};
+
+async function playDemo() {
+  const t = await fetch('/demo-scan.json').then(r => r.json());
+  // 둘러보기에서 고른 레포 이름으로 보여 준다. 내용은 데모 레포 그대로
+  const repo = params.get('repo'), branch = params.get('branch');
+  // 범위 설정에서 고른 파일·폴더(paths)만 재생한다. 범위 밖 파일의 발견은 수정·재검증까지 함께 뺀다
+  const paths = JSON.parse(params.get('paths') || '[]');
+  const inScope = p => !paths.length || paths.some(x => p === x || p.startsWith(`${x}/`));
+  const out = new Set(t.scan.filter(x => x.event.type === 'finding.detected' && !inScope(x.event.finding.path)).map(x => x.event.finding.id));
+  const keep = ({ event: e }) => !out.has(e.findingId || e.finding?.id) && (!e.path || inScope(e.path));
+  const shape = e => e.type !== 'scan.started' ? e
+    : { ...e, files: e.files.filter(f => inScope(f.path)), ...(repo && { repo, branch: branch || e.branch }) };
+  let timers = [];
+  const play = list => list.filter(keep).forEach(({ at, event }) => timers.push(setTimeout(() => onEvent(shape(event)), at)));
+  replayDemo = () => { timers.forEach(clearTimeout); timers = []; play(t.scan); };
+  // 다시 볼 때마다 live 가 새로 만들어져 수정 요청도 다시 온다
+  addEventListener('patchi:fix', () => play(t.fix));
+  replayDemo();
+}
+
+if (feed === 'demo') document.querySelector('.keys').insertAdjacentHTML('beforeend', '<span><kbd>R</kbd> 다시</span>');
+
 // 글자 폭을 재기 전에 온 이벤트는 모아 뒀다가 넘긴다
 let ready = false;
 const queue = [];
 window.patchiScan = { push: e => (ready ? onEvent(e) : queue.push(e)) };
-dispatchEvent(new CustomEvent('patchi:ready'));
 </script>
 </body>
 </html>

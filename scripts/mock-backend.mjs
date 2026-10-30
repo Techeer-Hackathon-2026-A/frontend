@@ -1,10 +1,10 @@
 // 백엔드 API(app/api/v1) 를 흉내 내는 로컬 서버. 백엔드 없이 화면 흐름을 확인할 때 쓴다.
-//   npm run mock-backend   → http://localhost:8000 (vite 가 /api 를 여기로 보낸다)
+//   npm run mock-backend   → http://localhost:8000 (next.config 가 /api/v1 을 여기로 보낸다)
 // 어떤 레포를 넣어도 공개 레포 OWASP/NodeGoat 의 실제 취약 코드 4건을 찾은 것처럼 답한다.
 // 스캔: 약 4초 동안 클론 → 탐지 → 분류 후 완료. 수정안: 요청 1~2초 뒤 생성. PR: 1~2초 뒤 생성.
 import { createServer } from 'node:http'
 
-const PORT = 8000
+const PORT = Number(process.env.PORT) || 8000
 const now = () => new Date().toISOString()
 
 const FINDINGS = [

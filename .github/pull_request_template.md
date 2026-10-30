@@ -14,4 +14,4 @@
 ## 확인
 - [ ] `npm run build` 통과
 - [ ] `npm run lint` 통과
-- [ ] `.env`, API 키, 토큰이 포함되지 않음
+- [ ] `.env*`, API 키, 토큰이 포함되지 않음
