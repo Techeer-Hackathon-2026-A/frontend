@@ -8,6 +8,10 @@ export function useCreateScan() {
   return useMutation({ mutationFn: scansApi.create })
 }
 
+export function useScans() {
+  return useQuery({ queryKey: ['scans'], queryFn: scansApi.list })
+}
+
 export function useScan(scanId: number) {
   return useQuery({ queryKey: ['scan', scanId], queryFn: () => scansApi.get(scanId) })
 }

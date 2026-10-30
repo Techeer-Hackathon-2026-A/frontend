@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patchi Scan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* 레퍼런스: Linear(3단 앱 프레임·모노톤), Vercel(단일 광원 스포트라이트), Raycast(단일 강조색), Family(캐릭터 대비) */
+  :root {
+    --bg: #08090a;
+    --panel: #0e0f11;
+    --panel-2: #16171a;
+    --border: rgba(255, 255, 255, .07);
+    --text: #f7f8f8;
+    --muted: #8a8f98;
+    --faint: #4d5157;
+    --red: #ff5a52;
+    --red-bg: rgba(255, 90, 82, .09);
+    --amber: #f2c94c;
+    --green: #4cb782;
+    --green-bg: rgba(76, 183, 130, .09);
+    --lh: 24px;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; overflow: hidden;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  kbd { font: 11px var(--mono); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+
+  .app { display: grid; grid-template-rows: 52px 1fr; height: 100vh; }
+
+  /* header */
+  header { display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+  .logo { width: 22px; height: 22px; border-radius: 6px; background: var(--text); display: grid; place-items: center; }
+  .crumb { font-size: 13px; color: var(--muted); }
+  .crumb b { color: var(--text); font-weight: 500; }
+  .branch { font: 12px var(--mono); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; }
+  .spacer { flex: 1; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .status i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  .status.live i { background: var(--green); animation: pulse 1.6s infinite; }
+  .status.done i { background: var(--text); }
+  .icon-btn { height: 28px; min-width: 28px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--border); font: 12px var(--mono); color: var(--muted); display: grid; place-items: center; }
+  .icon-btn:hover { color: var(--text); background: var(--panel-2); }
+
+  main { display: grid; grid-template-columns: 232px minmax(0, 1fr) 312px; min-height: 0; }
+
+  /* files */
+  .files { border-right: 1px solid var(--border); padding: 12px 8px; overflow: auto; }
+  .label { font-size: 12px; color: var(--faint); padding: 4px 10px 8px; }
+  .file { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 13px; color: var(--muted); }
+  .file.active { background: var(--panel-2); color: var(--text); }
+  .file .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file .dir { color: var(--faint); font-size: 12px; margin-left: 6px; }
+  .st { width: 14px; height: 14px; flex: none; display: grid; place-items: center; }
+  .st .o { width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid var(--faint); }
+  .st .spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--faint); border-top-color: var(--text); animation: spin .8s linear infinite; }
+  .st .n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--red); color: #fff; font: 600 10px/16px Inter; text-align: center; }
+
+  /* editor */
+  .editor { position: relative; display: grid; grid-template-rows: 40px minmax(0, 1fr) 2px; min-width: 0; min-height: 0; }
+  .tabbar { display: flex; align-items: center; gap: 8px; padding: 0 20px; border-bottom: 1px solid var(--border); font: 12.5px var(--mono); color: var(--muted); }
+  .tabbar b { color: var(--text); font-weight: 400; }
+  .scroll { position: relative; overflow: hidden; }
+  .code { position: relative; min-width: max-content; padding: 200px 0 70vh; font: 13.5px/var(--lh) var(--mono); font-variant-ligatures: none; transition: opacity .2s; }
+  .code.swap { opacity: 0; }
+  .line { position: relative; display: flex; height: var(--lh); }
+  .ln { width: 56px; flex: none; padding-right: 14px; text-align: right; color: var(--faint); user-select: none; transition: color .3s; }
+  .line.seen .ln { color: #70757d; }
+  .src { padding-left: 48px; white-space: pre; color: #c9ccd1; }
+  .line.bad { background: var(--red-bg); }
+  .line.bad::before, .line.del::before, .line.add::before, .line.fixed::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--red); }
+  .line.fixed, .line.add { background: var(--green-bg); }
+  .line.fixed::before, .line.add::before { background: var(--green); }
+  .line.del { background: rgba(255, 90, 82, .07); }
+  .line.del .ln { color: var(--red); }
+  .line.del .src { opacity: .5; text-decoration: line-through; text-decoration-color: rgba(255, 90, 82, .7); }
+  .line.add .ln { color: var(--green); }
+  .line.new { animation: grow .22s ease-out; }
+  .caret { display: inline-block; width: 7px; height: 15px; margin-left: 1px; vertical-align: -3px; background: var(--green); animation: pulse .7s infinite; }
+  .tag { margin-left: 28px; padding-right: 24px; white-space: nowrap; font: 500 11px/var(--lh) Inter; color: var(--red); letter-spacing: .02em; animation: fade .3s; }
+  .line.fixed .tag { color: var(--green); }
+  .k { color: #c4b5fd; } .s { color: #a8d5b5; } .c { color: #5c6066; font-style: italic; } .n { color: #f5b88a; } .f { color: #93c5fd; }
+
+  .spot {
+    position: absolute; inset: 0; pointer-events: none; z-index: 3; opacity: 0; transition: opacity .6s;
+    background: radial-gradient(240px 130px at var(--sx, 50%) var(--sy, 0px), rgba(8, 9, 10, 0) 0%, rgba(8, 9, 10, 0) 35%, rgba(8, 9, 10, .72) 100%);
+  }
+  .spot.on { opacity: 1; }
+  .lens { position: absolute; z-index: 2; height: var(--lh); border-radius: 5px; opacity: 0; transition: opacity .2s, background .25s, box-shadow .25s; }
+  .lens.look { opacity: 1; background: rgba(242, 201, 76, .10); box-shadow: inset 0 0 0 1px rgba(242, 201, 76, .7); }
+  .lens.hit { opacity: 1; background: rgba(255, 90, 82, .16); box-shadow: inset 0 0 0 1px var(--red), 0 0 24px rgba(255, 90, 82, .35); }
+  .lens.ok { opacity: 1; background: rgba(76, 183, 130, .12); box-shadow: inset 0 0 0 1px var(--green), 0 0 24px rgba(76, 183, 130, .25); }
+
+  .progress { background: var(--border); }
+  .progress i { display: block; height: 100%; width: 0; background: var(--text); transition: width .2s; }
+  .keys { position: absolute; right: 16px; bottom: 14px; z-index: 6; display: flex; gap: 12px; font-size: 11px; color: var(--faint); }
+  .editor.shake .scroll { animation: shake .32s; }
+
+  /* character */
+  .char { position: absolute; left: 0; top: 0; z-index: 5; width: 44px; height: 42px; pointer-events: none; transition: transform var(--move, 140ms) cubic-bezier(.3, .7, .4, 1); }
+  .char.gone { visibility: hidden; }
+  .tilt { width: 100%; height: 100%; transition: transform .25s; transform-origin: 50% 100%; }
+  .fig { width: 100%; height: 100%; transform-origin: 50% 100%; animation: idle 1.4s ease-in-out infinite; }
+  .fig svg { width: 100%; height: 100%; overflow: visible; display: block; }
+  .char.hop .fig { animation: hop .16s ease-out; }
+  .char.alert .fig { animation: jump .45s ease-out; }
+  .char.happy .fig { animation: jump .5s ease-out infinite; }
+  .char.leave .fig { animation: leave .28s ease-in forwards; }
+  .char.drop .fig { animation: drop .45s cubic-bezier(.3, .7, .4, 1.2); }
+  .char.sniff .tilt { transform: rotate(-9deg); }
+  .char.fix .tilt { animation: work .3s ease-in-out infinite; }
+  .glass, .wrench, .eyes-happy, .eyes-x { display: none; }
+  .char.sniff .glass, .char.fix .wrench { display: inline; }
+  .char.happy .eyes-open, .char.alert .eyes-open { display: none; }
+  .char.happy .eyes-happy { display: inline; }
+  .char.alert .eyes-x { display: inline; }
+  .mark { position: absolute; right: -6px; top: -10px; font: 700 15px Inter; color: var(--red); opacity: 0; }
+  .char.alert .mark { opacity: 1; animation: pop .3s; }
+  .bubble {
+    position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translate(-50%, 4px) scale(.9);
+    background: #fff; color: #111; font: 600 12px Inter; padding: 3px 9px; border-radius: 999px;
+    white-space: nowrap; opacity: 0; transition: opacity .15s, transform .15s;
+  }
+  .bubble.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+
+  /* intro */
+  .intro { position: absolute; inset: 40px 0 2px; z-index: 8; display: grid; place-content: center; justify-items: center; gap: 18px; background: rgba(8, 9, 10, .78); backdrop-filter: blur(6px); transition: opacity .35s; }
+  .intro.out { opacity: 0; pointer-events: none; }
+  .intro .big { width: 92px; height: 88px; }
+  .intro .big .fig { animation-duration: 1.8s; }
+  .intro h1 { font-size: 22px; font-weight: 500; letter-spacing: -.02em; }
+  .intro p { font: 13px var(--mono); color: var(--muted); margin-top: -10px; }
+  .primary { height: 36px; padding: 0 16px; border-radius: 999px; background: var(--text); color: #08090a; font-weight: 500; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; transition: transform .15s, opacity .2s; }
+  .primary:hover { transform: translateY(-1px); }
+  .primary:disabled { opacity: .7; cursor: default; transform: none; }
+  .primary.done { background: var(--green); color: #04130b; }
+
+  /* findings */
+  .findings { border-left: 1px solid var(--border); display: grid; grid-template-rows: 40px minmax(0, 1fr) auto; min-height: 0; }
+  .fh { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+  .fh b { color: var(--text); font-weight: 500; }
+  .list { overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .empty { color: var(--faint); font-size: 13px; padding: 8px 4px; }
+  .card { padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); cursor: pointer; transition: border-color .2s, opacity .3s; }
+  .card.pending { visibility: hidden; }
+  .card.in { animation: cardIn .35s cubic-bezier(.3, .7, .4, 1); }
+  .card:hover { border-color: rgba(255, 255, 255, .16); }
+  .card.active { border-color: rgba(255, 255, 255, .4); }
+  .card .row { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); }
+  .card .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+  .card[data-sev="high"] .dot { background: var(--amber); }
+  .card .loc { margin-left: auto; font: 11px var(--mono); color: var(--faint); }
+  .card .title { margin-top: 6px; font-size: 13.5px; font-weight: 500; }
+  .card .desc { margin-top: 2px; font-size: 12.5px; color: var(--muted); }
+  .card.fixed .dot { background: var(--green); }
+  .card.fixed .title { color: var(--muted); }
+  .summary { padding: 16px; border-top: 1px solid var(--border); display: none; }
+  .summary.show { display: block; animation: fade .4s; }
+  .sum-n { font-size: 40px; font-weight: 500; letter-spacing: -.04em; line-height: 1; }
+  .sum-l { margin: 6px 0 16px; font-size: 13px; color: var(--muted); }
+  .sum-l .plus { color: var(--green); } .sum-l .minus { color: var(--red); }
+  .summary .primary { width: 100%; justify-content: center; }
+
+  .ghost { position: fixed; left: 0; top: 0; z-index: 50; width: 22px; height: 22px; pointer-events: none; }
+
+  @keyframes pulse { 50% { opacity: .35; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes idle { 50% { transform: scale(1.03, .97); } }
+  @keyframes hop { 50% { transform: translateY(-5px); } }
+  @keyframes jump { 30% { transform: translateY(-14px); } 60% { transform: translateY(0) scale(1.08, .92); } }
+  @keyframes work { 50% { transform: rotate(7deg) translateY(-2px); } }
+  @keyframes leave { to { transform: translateY(-34px) scale(.6); opacity: 0; } }
+  @keyframes drop { from { transform: translateY(-70px); opacity: 0; } 60% { transform: translateY(3px); opacity: 1; } }
+  @keyframes pop { from { transform: scale(.2); } 70% { transform: scale(1.3); } }
+  @keyframes shake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+  @keyframes fade { from { opacity: 0; } }
+  @keyframes grow { from { height: 0; opacity: 0; } }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+
+  @media (max-width: 1280px) { main { grid-template-columns: 200px minmax(0, 1fr) 272px; } }
+  @media (max-width: 960px) { main { grid-template-columns: minmax(0, 1fr) 272px; } .files { display: none; } }
+  @media (max-width: 720px) {
+    main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 38vh; }
+    .findings { border-left: 0; border-top: 1px solid var(--border); }
+    .crumb, .branch, .keys { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <!-- web 에 합치면서 로고를 처음 화면으로 가는 링크로 감쌌다. 나머지는 demo/index.html 원본 그대로 -->
+    <a href="/" title="처음으로" aria-label="처음으로" style="display: contents"><div class="logo"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1 10.5 3v3.2C10.5 8.7 8.6 10.6 6 11.2 3.4 10.6 1.5 8.7 1.5 6.2V3Z" fill="#08090a"/></svg></div></a>
+    <span class="crumb">acme / <b>shop-web</b></span>
+    <span class="branch">main</span>
+    <span class="spacer"></span>
+    <span class="status" id="status"><i></i><span id="statusText">대기</span></span>
+    <button class="icon-btn" id="speedBtn" title="속도 (F)">1×</button>
+    <button class="icon-btn" id="playBtn" title="일시정지 (Space)">
+      <svg width="10" height="10" viewBox="0 0 10 10" id="playIcon"><path d="M2 1h2v8H2zM6 1h2v8H6z" fill="currentColor"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <aside class="files">
+      <div class="label">Files</div>
+      <div id="tree"></div>
+    </aside>
+
+    <section class="editor" id="editor">
+      <div class="tabbar" id="tab"></div>
+      <div class="scroll" id="scroll">
+        <div class="code" id="code">
+          <div id="lines"></div>
+          <div class="lens" id="lens"></div>
+          <div class="spot" id="spot"></div>
+          <div class="char gone" id="char">
+            <div class="bubble" id="bubble"></div>
+            <span class="mark">!</span>
+            <div class="tilt"><div class="fig"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="progress"><i id="bar"></i></div>
+      <div class="keys"><span><kbd>Space</kbd> 정지</span><span><kbd>R</kbd> 다시</span><span><kbd>F</kbd> 속도</span></div>
+
+      <div class="intro" id="intro">
+        <div class="char big" style="position:static"><div class="tilt"><div class="fig"></div></div></div>
+        <h1>acme/shop-web</h1>
+        <p>4 files · main</p>
+        <button class="primary" id="startBtn">스캔 시작 <kbd style="color:#08090a;border-color:rgba(0,0,0,.2)">Space</kbd></button>
+      </div>
+    </section>
+
+    <aside class="findings">
+      <div class="fh"><b>Findings</b><span id="count">0</span></div>
+      <div class="list" id="list"><div class="empty" id="empty">—</div></div>
+      <div class="summary" id="summary">
+        <div class="sum-n" id="sumN">0</div>
+        <div class="sum-l" id="sumL"></div>
+        <button class="primary" id="fixBtn">모두 고치고 PR 열기</button>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- 캐릭터: 치이카와 풍 임시 플레이스홀더 (교체 쉬움: 이 템플릿만 바꾸면 됨) -->
+<template id="charSvg">
+  <svg viewBox="0 0 48 46">
+    <g stroke="#2b2b2b" stroke-width="1.6" fill="#fff">
+      <ellipse cx="13" cy="10" rx="5" ry="5.5"/>
+      <ellipse cx="35" cy="10" rx="5" ry="5.5"/>
+      <ellipse cx="17" cy="42" rx="4.5" ry="2.6"/>
+      <ellipse cx="31" cy="42" rx="4.5" ry="2.6"/>
+      <path d="M24 6c13 0 20 9 20 19 0 11-8 16-20 16S4 36 4 25C4 15 11 6 24 6Z"/>
+    </g>
+    <ellipse cx="11.5" cy="29" rx="3.4" ry="1.9" fill="#ffb7c5"/>
+    <ellipse cx="36.5" cy="29" rx="3.4" ry="1.9" fill="#ffb7c5"/>
+    <g class="eyes-open">
+      <ellipse cx="17" cy="24" rx="2.2" ry="2.8" fill="#2b2b2b"/>
+      <ellipse cx="31" cy="24" rx="2.2" ry="2.8" fill="#2b2b2b"/>
+      <circle cx="17.7" cy="22.9" r=".8" fill="#fff"/>
+      <circle cx="31.7" cy="22.9" r=".8" fill="#fff"/>
+    </g>
+    <g class="eyes-happy" fill="none" stroke="#2b2b2b" stroke-width="1.6" stroke-linecap="round">
+      <path d="M14.8 24.5q2.2-3 4.4 0M28.8 24.5q2.2-3 4.4 0"/>
+    </g>
+    <g class="eyes-x" fill="none" stroke="#2b2b2b" stroke-width="1.6" stroke-linecap="round">
+      <path d="M15 22l4 2.2-4 2.2M33 22l-4 2.2 4 2.2"/>
+    </g>
+    <path d="M21.6 29.2q1.2 1.3 2.4 0 1.2 1.3 2.4 0" fill="none" stroke="#2b2b2b" stroke-width="1.3" stroke-linecap="round"/>
+    <g class="glass" fill="none" stroke="#2b2b2b" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="47" cy="32" r="5" fill="rgba(147,197,253,.35)"/>
+      <path d="M43.5 35.5 40 39"/>
+    </g>
+    <g class="wrench" stroke-linecap="round">
+      <path d="M40 39 48 31" stroke="#2b2b2b" stroke-width="4.2"/>
+      <path d="M40 39 48 31" stroke="#d4d7dc" stroke-width="2.2"/>
+      <circle cx="49.6" cy="29.4" r="3.7" fill="#d4d7dc" stroke="#2b2b2b" stroke-width="1.4"/>
+      <circle cx="50.7" cy="28.3" r="1.4" fill="#08090a"/>
+    </g>
+  </svg>
+</template>
+
+<template id="bugSvg">
+  <svg viewBox="0 0 22 22" width="22" height="22">
+    <g stroke="#ff5a52" stroke-width="1.5" stroke-linecap="round">
+      <path d="M8 4 9.5 6.5M14 4l-1.5 2.5M4 10h3M15 10h3M4.5 15 7 13.5M17.5 15 15 13.5M6 19l2-2.5M16 19l-2-2.5"/>
+    </g>
+    <ellipse cx="11" cy="12.5" rx="5" ry="6" fill="#ff5a52"/>
+    <circle cx="9.2" cy="10.5" r="1" fill="#fff"/><circle cx="12.8" cy="10.5" r="1" fill="#fff"/>
+  </svg>
+</template>
+
+<script type="text/plain" data-path="src/app/page.tsx">import Link from "next/link";
+
+export default function Home() {
+  return (
+    <main className="p-8">
+      <h1>Shop</h1>
+      <Link href="/orders">My orders</Link>
+    </main>
+  );
+}</script>
+
+<script type="text/plain" data-path="src/app/api/users/route.ts">import { db } from "@/lib/db";
+import { NextResponse } from "next/server";
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const q = searchParams.get("q") ?? "";
+
+  const users = await db.query(
+    `SELECT id, email FROM users WHERE name LIKE '%${q}%'`
+  );
+
+  return NextResponse.json(users.rows);
+}
+
+export async function DELETE(req: Request) {
+  const { id } = await req.json();
+  await db.query("DELETE FROM users WHERE id = $1", [id]);
+  return NextResponse.json({ ok: true });
+}</script>
+
+<script type="text/plain" data-path="src/lib/supabase.ts">import { createClient } from "@supabase/supabase-js";
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const key = process.env.NEXT_PUBLIC_SERVICE_ROLE_KEY!;
+
+export const supabase = createClient(url, key);</script>
+
+<script type="text/plain" data-path="src/app/api/orders/[id]/route.ts">import { getSession } from "@/lib/auth";
+import { db } from "@/lib/db";
+
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getSession();
+  if (!session) return new Response(null, { status: 401 });
+
+  const order = await db.order.findUnique({
+    where: { id: params.id },
+  });
+
+  return Response.json(order);
+}</script>
+
+<script>
+// 나중에 백엔드 이벤트(finding.detected, fix.applied)로 이 NOTES를 채우면 같은 연출이 그대로 돈다.
+// key = 원본 파일의 줄 번호(1부터). fix 의 line 도 원본 줄 번호 기준이다.
+//   del: 그 줄부터 지울 줄 수(0이면 그 줄 아래에 삽입만), add: 새로 쓸 줄들
+const NOTES = {
+  'src/app/api/users/route.ts': {
+    9: {
+      token: "${q}",
+      finding: { sev: 'critical', title: 'SQL Injection', desc: '입력값이 쿼리에 그대로 들어가요' },
+      fix: [{ line: 9, del: 1, add: ['    "SELECT id, email FROM users WHERE name LIKE $1",', '    [`%${q}%`]'] }],
+    },
+    15: {
+      token: 'DELETE',
+      finding: { sev: 'critical', title: '인증 없는 삭제 API', desc: '누구나 유저를 지울 수 있어요' },
+      fix: [
+        { line: 15, add: ['  const session = await getSession();', '  if (session?.role !== "admin") return new Response(null, { status: 403 });'] },
+        { line: 2, add: ['import { getSession } from "@/lib/auth";'] },
+      ],
+    },
+    17: { token: '$1', safe: '이건 안전해' },
+  },
+  'src/lib/supabase.ts': {
+    3: { token: 'NEXT_PUBLIC_SUPABASE_URL', safe: '공개해도 돼' },
+    4: {
+      token: 'NEXT_PUBLIC_SERVICE_ROLE_KEY',
+      finding: { sev: 'critical', title: '관리자 키 노출', desc: 'service_role 키가 브라우저에 번들돼요' },
+      fix: [{ line: 4, del: 1, add: ['const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;'] }],
+    },
+  },
+  'src/app/api/orders/[id]/route.ts': {
+    9: { token: 'if (!session)', safe: '로그인 체크 OK' },
+    12: {
+      token: '{ id: params.id }',
+      finding: { sev: 'high', title: '남의 주문 조회 (IDOR)', desc: '주문 주인을 확인하지 않아요' },
+      fix: [{ line: 12, del: 1, add: ['    where: { id: params.id, userId: session.user.id },'] }],
+    },
+  },
+};
+
+const FILES = [...document.querySelectorAll('script[data-path]')].map(s => ({
+  path: s.dataset.path,
+  lines: s.textContent.split('\n'),
+  notes: NOTES[s.dataset.path] || {},
+  rows: [],
+}));
+
+const $ = id => document.getElementById(id);
+const els = {
+  tree: $('tree'), tab: $('tab'), lines: $('lines'), code: $('code'), scroll: $('scroll'),
+  char: $('char'), bubble: $('bubble'), lens: $('lens'), spot: $('spot'), bar: $('bar'),
+  list: $('list'), empty: $('empty'), count: $('count'), summary: $('summary'),
+  sumN: $('sumN'), sumL: $('sumL'), fixBtn: $('fixBtn'), intro: $('intro'),
+  status: $('status'), statusText: $('statusText'), editor: $('editor'),
+  speedBtn: $('speedBtn'), playBtn: $('playBtn'), playIcon: $('playIcon'),
+};
+
+document.querySelectorAll('.fig').forEach(f => f.append($('charSvg').content.cloneNode(true)));
+
+const LH = 24, PAD_TOP = 200, LANE_X = 58, SRC_X = 104, CHAR_W = 44, CHAR_H = 42;
+let chW = 8.1;
+
+// ---------- 하이라이터 ----------
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const TOKEN = /(\/\/.*$)|(`[^`]*`|"[^"]*"|'[^']*')|\b(import|from|export|default|async|function|const|let|await|return|if|new|null|true|false)\b|\b(\d+)\b|([A-Za-z_$][\w$]*)(?=\()/g;
+function hl(line) {
+  let out = '', last = 0, m;
+  TOKEN.lastIndex = 0;
+  while ((m = TOKEN.exec(line))) {
+    const cls = m[1] ? 'c' : m[2] ? 's' : m[3] ? 'k' : m[4] ? 'n' : 'f';
+    out += esc(line.slice(last, m.index)) + `<span class="${cls}">${esc(m[0])}</span>`;
+    last = TOKEN.lastIndex;
+  }
+  return out + esc(line.slice(last));
+}
+
+// ---------- 상태 ----------
+// 파일 내용은 rows 로 관리한다: { text, kind: 'ctx'|'del'|'add', orig } — 수정 연출에서 줄이 지워지고 끼워진다
+let state, gen = 0, paused = false, speed = 1;
+const SPEEDS = [1, 2, 4];
+
+function freshState() {
+  FILES.forEach(f => { f.rows = f.lines.map((text, orig) => ({ text, kind: 'ctx', orig })); });
+  return {
+    phase: 'idle', file: -1, seen: 0, added: 0, removed: 0,
+    total: FILES.reduce((n, f) => n + f.lines.length, 0),
+    files: FILES.map(() => ({ status: 'pending', seen: new Set(), bad: new Map(), fixed: new Map() })),
+    findings: [],
+    cx: LANE_X, cy: PAD_TOP, sx: LANE_X + 22, sy: PAD_TOP,
+  };
+}
+
+const rowsOf = () => FILES[state.file].rows;
+
+// ---------- 렌더 ----------
+function renderTree() {
+  els.tree.innerHTML = FILES.map((f, i) => {
+    const s = state.files[i];
+    const parts = f.path.split('/');
+    const name = parts.pop();
+    const dir = parts.slice(-2).join('/');
+    const clean = s.status === 'clean' || (s.status === 'issues' && s.bad.size === 0);
+    const icon = s.status === 'scanning' ? '<i class="spin"></i>'
+      : clean ? '<svg width="12" height="12" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-5" fill="none" stroke="#4cb782" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      : s.status === 'issues' ? `<i class="n">${s.bad.size}</i>`
+      : '<i class="o"></i>';
+    return `<div class="file ${i === state.file ? 'active' : ''}"><span class="st">${icon}</span><span class="name">${esc(name)}<span class="dir">${esc(dir)}</span></span></div>`;
+  }).join('');
+}
+
+function tagHTML(f, fixed) {
+  const label = fixed ? 'Fixed' : f.sev === 'critical' ? 'Critical' : 'High';
+  return `<span class="tag">${label} · ${esc(f.title)}</span>`;
+}
+
+function renderFile(i) {
+  const f = FILES[i], s = state.files[i];
+  els.tab.innerHTML = esc(f.path.split('/').slice(0, -1).join('/') + '/') + `<b>${esc(f.path.split('/').pop())}</b>`;
+  let num = 0;
+  els.lines.innerHTML = f.rows.map(row => {
+    const bad = s.bad.get(row), fixed = s.fixed.get(row);
+    const cls = ['line', row.kind !== 'ctx' && row.kind, s.seen.has(row) && 'seen', bad && 'bad', fixed && 'fixed', row.fresh && 'new'].filter(Boolean).join(' ');
+    const ln = row.kind === 'del' ? '−' : ++num;
+    const tag = bad ? tagHTML(bad) : fixed ? tagHTML(fixed, true) : '';
+    row.fresh = false;
+    return `<div class="${cls}"><span class="ln">${ln}</span><span class="src">${hl(row.text) || ' '}</span>${tag}</div>`;
+  }).join('');
+}
+
+const lineEl = n => els.lines.children[n];
+
+let lastStatus = '';
+function setStatus(text, mode) {
+  if (mode === 'live') lastStatus = text;
+  els.statusText.textContent = text;
+  els.status.className = 'status ' + (mode || '');
+}
+
+// ---------- 시간 (일시정지·배속·중단 지원) ----------
+function sleep(ms) {
+  const g = gen;
+  return new Promise((res, rej) => {
+    let left = ms, last = performance.now();
+    (function tick(now) {
+      if (g !== gen) return rej('abort');
+      if (!paused) left -= (now - last) * speed;
+      last = now;
+      left <= 0 ? res() : requestAnimationFrame(tick);
+    })(last);
+  });
+}
+
+// ---------- 캐릭터 ----------
+function restart(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+function placeChar(x, y, ms = 140) {
+  state.cx = x; state.cy = y;
+  els.char.style.setProperty('--move', ms / speed + 'ms');
+  els.char.style.transform = `translate(${x}px, ${y}px)`;
+}
+
+function laneFor(n) {
+  const rows = rowsOf();
+  let k = Math.min(n, rows.length - 1);
+  while (k > 0 && !rows[k].text.trim()) k--;
+  const indent = rows[k].text.match(/^\s*/)[0].length;
+  return SRC_X + indent * chW - CHAR_W - 4;
+}
+
+function charToLine(n, ms) {
+  placeChar(laneFor(n), PAD_TOP + n * LH + LH - CHAR_H + 3, ms);
+  restart(els.char, 'hop');
+}
+
+// 토큰 바로 윗줄에 서서 내려다본다
+function charOver(box, ms) {
+  placeChar(Math.max(LANE_X, box.x + box.w / 2 - CHAR_W / 2), box.y - CHAR_H + 6, ms);
+}
+
+function say(text) {
+  if (!text) return els.bubble.classList.remove('show');
+  els.bubble.textContent = text;
+  restart(els.bubble, 'show');
+}
+
+function pose(...names) {
+  els.char.classList.remove('sniff', 'alert', 'happy', 'hop', 'leave', 'drop', 'fix');
+  names.forEach(n => restart(els.char, n));
+}
+
+function tokenBox(n, token) {
+  const col = Math.max(0, rowsOf()[n].text.indexOf(token));
+  return { x: SRC_X + col * chW - 3, y: PAD_TOP + n * LH, w: token.length * chW + 6 };
+}
+
+function lineBox(n) {
+  const text = rowsOf()[n].text, indent = text.match(/^\s*/)[0].length;
+  return { x: SRC_X + indent * chW - 3, y: PAD_TOP + n * LH, w: (text.length - indent) * chW + 6 };
+}
+
+const NO_LENS = { x: 0, y: 0, w: 0 };
+function showLens(box, mode) {
+  Object.assign(els.lens.style, { left: box.x + 'px', top: box.y + 'px', width: box.w + 'px' });
+  els.lens.className = 'lens ' + (mode || '');
+}
+
+// 카메라·스포트라이트는 매 프레임 캐릭터를 부드럽게 따라간다
+(function frame() {
+  if (state) {
+    const target = state.cy - els.scroll.clientHeight * 0.42;
+    els.scroll.scrollTop += (target - els.scroll.scrollTop) * 0.1;
+    // 좁은 화면에서 토큰이 오른쪽 밖에 있으면 가로로도 따라간다
+    const targetX = Math.max(0, state.cx + CHAR_W + 48 - els.scroll.clientWidth);
+    els.scroll.scrollLeft += (targetX - els.scroll.scrollLeft) * 0.1;
+    state.sx += (state.cx + CHAR_W / 2 - state.sx) * 0.18;
+    state.sy += (state.cy + CHAR_H - 8 - state.sy) * 0.18;
+    els.spot.style.setProperty('--sx', state.sx + 'px');
+    els.spot.style.setProperty('--sy', state.sy + 'px');
+  }
+  requestAnimationFrame(frame);
+})();
+
+// ---------- 발견 카드 ----------
+function addCard(f) {
+  els.empty.remove();
+  const card = document.createElement('div');
+  card.className = 'card pending';
+  card.dataset.sev = f.sev;
+  card.innerHTML = `<div class="row"><i class="dot"></i><span class="sev">${f.sev === 'critical' ? 'Critical' : 'High'}</span><span class="loc">${esc(FILES[f.file].path.split('/').pop())}:${f.line + 1}</span></div><div class="title">${esc(f.title)}</div><div class="desc">${esc(f.desc)}</div>`;
+  card.onclick = () => revisit(f);
+  els.list.append(card);
+  f.card = card;
+  els.list.scrollTop = els.list.scrollHeight;
+  return card;
+}
+
+function flyBug(fromBox, card) {
+  const r0 = els.code.getBoundingClientRect();
+  const x0 = r0.left + fromBox.x + fromBox.w / 2 - 11, y0 = r0.top + fromBox.y + 1;
+  const r1 = card.getBoundingClientRect();
+  const x1 = r1.left + 14, y1 = r1.top + 10;
+  const ghost = document.createElement('div');
+  ghost.className = 'ghost';
+  ghost.append($('bugSvg').content.cloneNode(true));
+  document.body.append(ghost);
+  const anim = ghost.animate([
+    { transform: `translate(${x0}px, ${y0}px) scale(.4)`, opacity: 0 },
+    { transform: `translate(${x0}px, ${y0 - 26}px) scale(1.3)`, opacity: 1, offset: .25 },
+    { transform: `translate(${(x0 + x1) / 2}px, ${Math.min(y0, y1) - 70}px) scale(1.1)`, offset: .6 },
+    { transform: `translate(${x1}px, ${y1}px) scale(.5)`, opacity: .2 },
+  ], { duration: 820 / speed, easing: 'cubic-bezier(.4,0,.2,1)' });
+  return anim.finished.then(() => ghost.remove());
+}
+
+// ---------- 스캔 시퀀스 ----------
+async function switchFile(i, row = 0) {
+  if (state.file >= 0) {
+    pose('leave');
+    els.code.classList.add('swap');
+    await sleep(300);
+  }
+  state.file = i;
+  renderTree();
+  renderFile(i);
+  showLens(NO_LENS);
+  charToLine(row, 0);
+  els.scroll.scrollTop = state.cy - els.scroll.clientHeight * 0.42;
+  els.char.classList.remove('gone');
+  els.code.classList.remove('swap');
+  pose('drop');
+  await sleep(450);
+}
+
+async function inspect(n, note) {
+  const box = tokenBox(n, note.token);
+  charOver(box, 380);
+  pose('sniff');
+  showLens(box, 'look');
+  say('음…?');
+  await sleep(900);
+
+  if (note.safe) {
+    showLens(box, 'ok');
+    pose('happy');
+    say(note.safe);
+    await sleep(800);
+  } else {
+    const row = rowsOf()[n];
+    const f = { ...note.finding, fix: note.fix, file: state.file, line: n, token: note.token, row };
+    state.findings.push(f);
+    state.files[state.file].bad.set(row, f);
+    showLens(box, 'hit');
+    pose('alert');
+    say('찾았다!');
+    lineEl(n).classList.add('bad');
+    lineEl(n).insertAdjacentHTML('beforeend', tagHTML(f));
+    if (f.sev === 'critical') restart(els.editor, 'shake');
+    renderTree();
+    const card = addCard(f);
+    await flyBug(box, card);
+    card.classList.remove('pending');
+    restart(card, 'in');
+    els.count.textContent = state.findings.length;
+    await sleep(500);
+  }
+  say('');
+  pose();
+  showLens(NO_LENS);
+  charToLine(n, 260);
+  await sleep(260);
+}
+
+async function run() {
+  ++gen;
+  reset();
+  state.phase = 'running';
+  els.intro.classList.add('out');
+  els.spot.classList.add('on');
+  try {
+    for (let i = 0; i < FILES.length; i++) {
+      setStatus(`스캔 중 · ${i + 1}/${FILES.length}`, 'live');
+      state.files[i].status = 'scanning';
+      await switchFile(i);
+      const f = FILES[i];
+      for (let n = 0; n < f.rows.length; n++) {
+        charToLine(n);
+        state.files[i].seen.add(f.rows[n]);
+        lineEl(n).classList.add('seen');
+        els.bar.style.width = (++state.seen / state.total) * 100 + '%';
+        await sleep(f.rows[n].text.trim() ? 150 : 60);
+        if (f.notes[n + 1]) await inspect(n, f.notes[n + 1]);
+      }
+      state.files[i].status = state.files[i].bad.size ? 'issues' : 'clean';
+      renderTree();
+      await sleep(300);
+    }
+    finish();
+  } catch (e) {
+    if (e !== 'abort') throw e;
+  }
+}
+
+function finish() {
+  state.phase = 'done';
+  els.spot.classList.remove('on');
+  pose('happy');
+  say('끝!');
+  setTimeout(() => { if (state.phase === 'done') { say(''); pose(); } }, 1600);
+  const n = state.findings.length;
+  const crit = state.findings.filter(f => f.sev === 'critical').length;
+  setStatus(`완료 · ${n}건`, 'done');
+  els.sumN.textContent = n;
+  els.sumL.textContent = `${crit} critical · ${n - crit} high`;
+  els.summary.classList.add('show');
+}
+
+// ---------- 수정 시퀀스 ----------
+async function typeRow(n, row, text) {
+  const src = lineEl(n).querySelector('.src');
+  for (let c = 0; c < text.length; c += 2) {
+    row.text = text.slice(0, c + 2);
+    src.innerHTML = hl(row.text) + '<i class="caret"></i>';
+    await sleep(16);
+  }
+  row.text = text;
+  src.innerHTML = hl(text);
+}
+
+async function applyHunk(f, h) {
+  const rows = FILES[f.file].rows;
+  const anchor = rows.find(r => r.orig === h.line - 1);
+  const idx = rows.indexOf(anchor);
+  const box = lineBox(idx);
+  charOver(box, 360);
+  pose('fix');
+  showLens(box, h.del ? 'hit' : 'look');
+  say('고치는 중');
+  await sleep(600);
+
+  for (let d = 0; d < (h.del || 0); d++) rows[idx + d].kind = 'del';
+  if (h.del) {
+    renderFile(f.file);
+    state.removed += h.del;
+    await sleep(380);
+  }
+  showLens(NO_LENS);
+
+  let at = idx + Math.max(h.del || 0, 1);
+  const added = [];
+  for (const text of h.add) {
+    const row = { text: '', kind: 'add', fresh: true };
+    rows.splice(at, 0, row);
+    renderFile(f.file);
+    charToLine(at, 160);
+    await typeRow(at, row, text);
+    added.push(row);
+    state.added++;
+    at++;
+    await sleep(120);
+  }
+  return added;
+}
+
+async function applyFix(f) {
+  const s = state.files[f.file];
+  f.card.classList.add('active');
+  f.card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  let firstAdded = null;
+  for (const h of f.fix) {
+    const added = await applyHunk(f, h);
+    firstAdded = firstAdded || added[0];
+  }
+  // 원래 줄을 지웠으면 새로 쓴 첫 줄이, 아니면 원래 줄이 Fixed 표시를 받는다
+  s.bad.delete(f.row);
+  f.fixedRow = f.row.kind === 'del' ? firstAdded : f.row;
+  s.fixed.set(f.fixedRow, f);
+  renderFile(f.file);
+  renderTree();
+
+  // 재검증: 같은 공격을 다시 보내서 막히는지 확인
+  const n = rowsOf().indexOf(f.fixedRow);
+  charOver(lineBox(n), 300);
+  pose('sniff');
+  say('다시 공격…');
+  showLens(lineBox(n), 'look');
+  await sleep(700);
+  showLens(lineBox(n), 'ok');
+  pose('happy');
+  say('막혔다!');
+  f.card.classList.remove('active');
+  f.card.classList.add('fixed');
+  f.card.querySelector('.sev').textContent = 'Fixed';
+  await sleep(750);
+  say('');
+  pose();
+  showLens(NO_LENS);
+}
+
+async function fixAll() {
+  if (state.phase !== 'done') return;
+  state.phase = 'fixing';
+  els.fixBtn.disabled = true;
+  els.fixBtn.textContent = '고치는 중…';
+  els.spot.classList.add('on');
+  try {
+    for (const [i, f] of state.findings.entries()) {
+      setStatus(`수정 중 · ${i + 1}/${state.findings.length}`, 'live');
+      if (state.file !== f.file) {
+        await switchFile(f.file, FILES[f.file].rows.indexOf(f.row));
+      }
+      await applyFix(f);
+    }
+  } catch (e) {
+    if (e !== 'abort') throw e;
+    return;
+  }
+  state.phase = 'fixed';
+  els.spot.classList.remove('on');
+  pose('happy');
+  say('PR 보냈어!');
+  setTimeout(() => { if (state.phase === 'fixed') { say(''); pose(); } }, 1800);
+  els.fixBtn.disabled = false;
+  els.fixBtn.classList.add('done');
+  els.fixBtn.textContent = 'PR #128 열림 ↗';
+  els.sumL.innerHTML = `${state.findings.length} fixed · <span class="plus">+${state.added}</span> <span class="minus">−${state.removed}</span>`;
+  setStatus('PR 생성됨', 'done');
+}
+
+// 완료 후 카드를 누르면 캐릭터가 해당 줄로 달려간다
+function revisit(f) {
+  if (state.phase !== 'done' && state.phase !== 'fixed') return;
+  if (state.file !== f.file) {
+    state.file = f.file;
+    renderTree();
+    renderFile(f.file);
+  }
+  const n = rowsOf().indexOf(f.fixedRow || f.row);
+  const box = f.fixedRow ? lineBox(n) : tokenBox(n, f.token);
+  charOver(box, 420);
+  pose('sniff');
+  showLens(box, f.fixedRow ? 'ok' : 'hit');
+}
+
+function reset() {
+  state = freshState();
+  paused = false;
+  syncPlayIcon();
+  els.list.innerHTML = '';
+  els.list.append(els.empty);
+  els.count.textContent = '0';
+  els.bar.style.width = '0';
+  els.summary.classList.remove('show');
+  els.fixBtn.className = 'primary';
+  els.fixBtn.disabled = false;
+  els.fixBtn.textContent = '모두 고치고 PR 열기';
+  say('');
+  pose();
+  showLens(NO_LENS);
+  renderTree();
+}
+
+// ---------- 컨트롤 ----------
+function syncPlayIcon() {
+  els.playIcon.innerHTML = paused
+    ? '<path d="M2 1l7 4-7 4z" fill="currentColor"/>'
+    : '<path d="M2 1h2v8H2zM6 1h2v8H6z" fill="currentColor"/>';
+}
+function togglePause() {
+  if (state.phase === 'idle') return run();
+  if (state.phase !== 'running' && state.phase !== 'fixing') return;
+  paused = !paused;
+  syncPlayIcon();
+  paused ? setStatus('일시정지') : setStatus(lastStatus, 'live');
+}
+function cycleSpeed() {
+  speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+  els.speedBtn.textContent = speed + '×';
+}
+$('startBtn').onclick = run;
+els.fixBtn.onclick = fixAll;
+els.playBtn.onclick = togglePause;
+els.speedBtn.onclick = cycleSpeed;
+addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+  else if (e.key === 'r' || e.key === 'R') run();
+  else if (e.key === 'f' || e.key === 'F') cycleSpeed();
+});
+
+// 모노스페이스 글자 폭을 잰 뒤 시작 화면을 그린다
+document.fonts.ready.then(() => {
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;font:13.5px var(--mono);white-space:pre';
+  probe.textContent = 'x'.repeat(100);
+  els.code.append(probe);
+  chW = probe.getBoundingClientRect().width / 100;
+  probe.remove();
+  reset();
+  state.file = 0;
+  renderTree();
+  renderFile(0);
+});
+</script>
+</body>
+</html>

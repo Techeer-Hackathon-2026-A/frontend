@@ -41,13 +41,17 @@ src/
 │   └── index.ts          # scansApi · reportsApi · fixesApi · pullRequestsApi
 ├── hooks/queries.ts      # TanStack Query 훅 (useScanProgress 등)
 ├── lib/labels.ts         # 심각도·상태 한글 라벨, 색상
-├── components/           # Layout, SeverityBadge, Loading/Error
+├── components/           # Layout, Logo, Character(캐릭터), SeverityBadge, ScanStatusLabel, Loading/Error
 └── pages/
     ├── HomePage.tsx          # A  레포 링크 입력
     ├── ScanPage.tsx          # A  진행 상태 실시간 표시 + 보안 분석 리포트
     ├── FindingDetailPage.tsx # B  취약점 상세 + AI 수정안 + PR 생성 요청
     └── PullRequestsPage.tsx  # B  PR 목록
+
+public/demo.html          # 연출 프로토타입 (캐릭터가 코드를 훑으며 찾고 고치는 장면, /demo.html)
 ```
+
+디자인 토큰(다크 테마 색·폰트)은 `src/index.css` 의 `@theme` 에 있습니다. `bg-bg`, `text-muted`, `border-line`, `bg-ok` 처럼 씁니다.
 
 ## 화면 · 라우트
 

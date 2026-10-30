@@ -3,10 +3,10 @@ import { Link, useParams } from 'react-router-dom'
 import { ErrorMessage, Loading } from '@/components/StateMessage'
 import { usePullRequests } from '@/hooks/queries'
 
-const STATUS_STYLE = {
-  pending: 'text-slate-500',
-  created: 'text-emerald-700',
-  failed: 'text-red-600',
+const STATUS = {
+  pending: { label: '생성 중', dot: 'animate-pulse bg-ok' },
+  created: { label: '생성됨', dot: 'bg-ok' },
+  failed: { label: '실패', dot: 'bg-danger' },
 } as const
 
 export function PullRequestsPage() {
@@ -14,31 +14,38 @@ export function PullRequestsPage() {
   const prs = usePullRequests(scanId)
 
   return (
-    <div className="space-y-6">
-      <Link to={`/scans/${scanId}`} className="text-sm text-slate-600 hover:underline">
+    <div className="flex flex-col gap-6">
+      <Link to={`/scans/${scanId}`} className="text-[13px] text-muted hover:text-fg">
         ← 리포트로
       </Link>
-      <h1 className="text-2xl font-bold">수정 PR 목록</h1>
+      <h1 className="text-[22px] font-medium tracking-tight">수정 PR 목록</h1>
 
       {prs.isLoading && <Loading />}
       {prs.error && <ErrorMessage error={prs.error} />}
-      {prs.data?.length === 0 && <p className="text-sm text-slate-500">아직 생성된 PR이 없습니다.</p>}
 
-      <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-        {prs.data?.map((pr) => (
-          <li key={pr.id} className="flex items-center gap-4 px-6 py-4 text-sm">
-            <span className={`w-16 font-medium ${STATUS_STYLE[pr.status]}`}>{pr.status}</span>
-            <span className="flex-1 font-mono text-xs">{pr.branch_name}</span>
-            {pr.pr_url ? (
-              <a href={pr.pr_url} target="_blank" rel="noreferrer" className="underline">
-                #{pr.pr_number}
-              </a>
-            ) : (
-              <span className="text-slate-400">-</span>
-            )}
-          </li>
-        ))}
-      </ul>
+      {prs.data && (
+        <ul className="divide-y divide-line rounded-[10px] border border-line">
+          {prs.data.length === 0 && (
+            <li className="px-4 py-6 text-center text-[13px] text-faint">아직 생성된 PR이 없어요</li>
+          )}
+          {prs.data.map((pr) => (
+            <li key={pr.id} className="flex items-center gap-4 px-4 py-3 text-[13px]">
+              <span className="inline-flex w-20 items-center gap-1.5 text-muted">
+                <i className={`size-1.5 rounded-full ${STATUS[pr.status].dot}`} />
+                {STATUS[pr.status].label}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-faint">{pr.branch_name}</span>
+              {pr.pr_url ? (
+                <a href={pr.pr_url} target="_blank" rel="noreferrer" className="text-ok hover:underline">
+                  PR #{pr.pr_number}
+                </a>
+              ) : (
+                <span className="text-faint">-</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

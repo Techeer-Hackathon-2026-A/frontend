@@ -10,12 +10,12 @@ export const SEVERITY_LABEL: Record<Severity, string> = {
   info: '정보',
 }
 
-export const SEVERITY_STYLE: Record<Severity, string> = {
-  critical: 'bg-red-100 text-red-800 ring-red-200',
-  high: 'bg-orange-100 text-orange-800 ring-orange-200',
-  medium: 'bg-amber-100 text-amber-800 ring-amber-200',
-  low: 'bg-sky-100 text-sky-800 ring-sky-200',
-  info: 'bg-slate-100 text-slate-700 ring-slate-200',
+export const SEVERITY_DOT: Record<Severity, string> = {
+  critical: 'bg-danger',
+  high: 'bg-danger/70',
+  medium: 'bg-warn',
+  low: 'bg-muted',
+  info: 'bg-faint',
 }
 
 export const CATEGORY_LABEL: Record<Category, string> = {
@@ -32,4 +32,14 @@ export const STATUS_LABEL: Record<ScanStatus, string> = {
   fixing: '수정안 생성 중',
   completed: '완료',
   failed: '실패',
+}
+
+export const STATUS_DOT: Record<ScanStatus, string> = {
+  pending: 'bg-faint',
+  cloning: 'animate-pulse bg-ok',
+  detecting: 'animate-pulse bg-ok',
+  classifying: 'animate-pulse bg-ok',
+  fixing: 'animate-pulse bg-ok',
+  completed: 'bg-ok',
+  failed: 'bg-danger',
 }

@@ -1,5 +1,29 @@
 @import 'tailwindcss';
 
+/* 디자인 토큰: Linear 톤 다크 + 단일 강조색 (public/demo.html 과 동일) */
 @theme {
-  --font-sans: 'Pretendard', ui-sans-serif, system-ui, sans-serif;
+  --color-bg: #08090a;
+  --color-panel: #0e0f11;
+  --color-panel-2: #16171a;
+  --color-line: rgb(255 255 255 / 0.07);
+  --color-fg: #f7f8f8;
+  --color-muted: #8a8f98;
+  --color-faint: #4d5157;
+  --color-danger: #ff5a52;
+  --color-warn: #f2c94c;
+  --color-ok: #4cb782;
+
+  --font-sans: 'Inter', 'Pretendard', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
