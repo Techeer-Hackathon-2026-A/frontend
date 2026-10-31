@@ -919,10 +919,13 @@ const scanId = params.get('id') || '';
 const feed = params.get('feed');
 // fix=login: 로그인 없이 링크로 시작한 스캔. 고치기·PR 은 로그인한 뒤에 한다
 const loginToFix = params.get('fix') === 'login';
-const back = params.get('back') || '/dashboard';
+// 주소창 값은 누구나 바꿀 수 있으니 이 사이트 안의 경로만 링크로 쓴다 (javascript:·//외부·공백 끼운 우회 차단)
+const sitePath = (p, fallback) => (/^\/(?![\/\\])[^\s\x00-\x1f\x7f]*$/.test(p || '') ? p : fallback);
+const back = sitePath(params.get('back'), '/dashboard');
 $('backLink').href = $('introBack').href = back;
 // 실제 스캔은 대시보드의 스캔 보고서로 이어진다
-if (params.get('report')) { $('reportLink').href = params.get('report'); $('reportLink').hidden = false; }
+const report = sitePath(params.get('report'), '');
+if (report) { $('reportLink').href = report; $('reportLink').hidden = false; }
 const api = `/api/scans/${encodeURIComponent(scanId)}`;
 let live;
 

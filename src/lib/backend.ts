@@ -1,6 +1,7 @@
 import "server-only";
+import { getToken } from "@/lib/session";
 
-// 팀 백엔드(FastAPI, /api/v1) 서버 호출. 브라우저 쪽 호출은 next.config 의 /api/v1 rewrite 로 같은 백엔드에 간다.
+// 팀 백엔드(FastAPI, /api/v1) 서버 호출. 브라우저 쪽 호출은 src/app/api/v1/[...path]/route.ts 가 이 함수로 전달한다.
 // 백엔드 스키마는 src/lib/api/types.ts (백엔드 app/schemas/api.py 와 1:1).
 
 export const BACKEND_URL = (process.env.BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
@@ -14,9 +15,12 @@ export class BackendError extends Error {
   }
 }
 
-function backendFetch(path: string, init: RequestInit = {}) {
+/** 서비스 키와 로그인한 사용자의 GitHub 토큰을 붙인다. 백엔드는 이 토큰으로 레포 권한을 확인한다 (없으면 익명: 공개 레포만) */
+export async function backendFetch(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   if (process.env.BACKEND_API_KEY) headers.set("Authorization", `Bearer ${process.env.BACKEND_API_KEY}`);
+  const token = await getToken();
+  if (token) headers.set("X-GitHub-Token", token);
   if (init.body) headers.set("Content-Type", "application/json");
   return fetch(`${BACKEND_URL}/api/v1${path}`, { ...init, headers, cache: "no-store" });
 }
